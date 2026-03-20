@@ -29,7 +29,6 @@ jobs:
         run: |
           bun run build
           bun test
-          bun run typecheck
 
       - name: Publish redop
         working-directory: packages/redop

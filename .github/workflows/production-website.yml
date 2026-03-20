@@ -13,15 +13,9 @@ on:
     paths:
       - apps/web/**
       - packages/**
-  workflow_run:
-    workflows: ["Deploy API Server"]
-    types:
-      - completed
-    branches:
-      - main
+
 jobs:
   deploy-production:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 20
     steps:
@@ -33,7 +27,6 @@ jobs:
       - name: Install dependencies
         # For CI/CD environments that want to enforce reproducible builds, use bun ci to fail the build if the package.json is out of sync with the lockfile:
         run: bun ci
-
       - name: 📤 Pull Vercel Environment to .env
         run: bunx vercel env pull .env --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
       - name: 📤 Pull Vercel Environment Information

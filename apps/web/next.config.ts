@@ -8,15 +8,7 @@ const nextConfig: NextConfig = {
   },
   async rewrites() {
     return [
-      // Mintlify /docs rewrites so to be in useagents.site/docs
-      {
-        source: "/docs",
-        destination: "https://useagents-66bd89b2.mintlify.dev/docs",
-      },
-      {
-        source: "/docs/:match*",
-        destination: "https://useagents-66bd89b2.mintlify.dev/docs/:match*",
-      },
+      // Mintlify /docs rewrites so to be in redop.useagents.site/docs
     ];
   },
 };
