@@ -7,7 +7,10 @@
     "lint": "turbo run lint",
     "check-types": "turbo run check-types",
     "check": "ultracite check",
-    "fix": "ultracite fix"
+    "fix": "ultracite fix",
+    "dev:web": "turbo run dev --filter=@redop-ai/web",
+    "build:web": "turbo run build --filter=@redop-ai/web",
+    "start:web": "turbo run start --filter=@redop-ai/web"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.7",
