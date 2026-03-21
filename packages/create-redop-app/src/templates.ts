@@ -1,11 +1,13 @@
 import type { DeployTarget, GeneratedFile, ResolvedOptions } from "./types";
 
 function toPackageName(name: string) {
-  return name
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9-_]+/g, "-")
-    .replace(/^-+|-+$/g, "") || "redop-app";
+  return (
+    name
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9-_]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "redop-app"
+  );
 }
 
 function toServerName(name: string) {
@@ -22,12 +24,15 @@ function renderPackageJson(options: ResolvedOptions) {
       scripts: {
         build: "bun build ./src/index.ts --outdir ./dist --target node",
         dev: "bun run src/index.ts",
-        start: options.transport === "http" ? "bun run src/index.ts" : "bun run src/index.ts",
+        start:
+          options.transport === "http"
+            ? "bun run src/index.ts"
+            : "bun run src/index.ts",
         typecheck: "tsc --noEmit",
       },
       dependencies: {
-        redop: "^0.1.0",
-        zod: "^4.3.6",
+        "@useagents/redop": "latest",
+        zod: "latest",
       },
       devDependencies: {
         "bun-types": "^1.3.11",

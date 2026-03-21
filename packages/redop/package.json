@@ -1,5 +1,5 @@
 {
-  "name": "redop",
+  "name": "@useagents/redop",
   "version": "0.1.0",
   "description": "Bun-native MCP server framework",
   "license": "MIT",
