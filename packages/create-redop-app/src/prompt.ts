@@ -40,47 +40,6 @@ export async function runPrompts(
 
   const project = await p.group(
     {
-      components: () =>
-        componentFlags.length > 0
-          ? Promise.resolve(componentFlags)
-          : p.multiselect({
-              message: "Select components to initialize:",
-              initialValues: ["tools"],
-              options: [
-                { value: "tools", label: "Tools", hint: "recommended" },
-                { value: "resources", label: "Resources" },
-                { value: "prompts", label: "Prompts" },
-              ],
-            }),
-      confirm: ({ results }) =>
-        p.confirm({
-          message: `Creating a new redop app in ${chalk.cyan(
-            path.resolve(process.cwd(), results.name as string)
-          )}. Ok to continue?`,
-        }),
-      deploy: ({ results }) => {
-        // 1. Skip if transport is stdio (local only)
-        if (results.transport === "stdio") {
-          return Promise.resolve("none" as DeployTarget);
-        }
-        // 2. Skip if flag is provided and valid
-        if (
-          flags?.deploy &&
-          DEPLOY_TARGETS.includes(flags.deploy as DeployTarget)
-        ) {
-          return Promise.resolve(flags.deploy as DeployTarget);
-        }
-
-        return p.select({
-          message: "Select a deployment target:",
-          options: [
-            { value: "none", label: "None (Manual)" },
-            { value: "railway", label: "Railway" },
-            { value: "fly-io", label: "Fly.io" },
-            { value: "vercel", label: "Vercel" },
-          ],
-        });
-      },
       name: () =>
         p.text({
           message: "What is your project named?",
@@ -120,13 +79,18 @@ export async function runPrompts(
           ],
         });
       },
-      template: () =>
-        p.select({
-          message: "Select a template:",
-          options: [
-            { value: "standard", label: "Default (Standard MCP server)" },
-          ],
-        }),
+      components: () =>
+        componentFlags.length > 0
+          ? Promise.resolve(componentFlags)
+          : p.multiselect({
+              message: "Select components to initialize:",
+              initialValues: ["tools"],
+              options: [
+                { value: "tools", label: "Tools", hint: "recommended" },
+                { value: "resources", label: "Resources" },
+                { value: "prompts", label: "Prompts" },
+              ],
+            }),
       transport: () => {
         // Skip prompt if flag is provided and valid
         if (
@@ -143,6 +107,42 @@ export async function runPrompts(
           ],
         });
       },
+      deploy: ({ results }) => {
+        // 1. Skip if transport is stdio (local only)
+        if (results.transport === "stdio") {
+          return Promise.resolve("none" as DeployTarget);
+        }
+        // 2. Skip if flag is provided and valid
+        if (
+          flags?.deploy &&
+          DEPLOY_TARGETS.includes(flags.deploy as DeployTarget)
+        ) {
+          return Promise.resolve(flags.deploy as DeployTarget);
+        }
+
+        return p.select({
+          message: "Select a deployment target:",
+          options: [
+            { value: "none", label: "None (Manual)" },
+            { value: "railway", label: "Railway" },
+            { value: "fly-io", label: "Fly.io" },
+            { value: "vercel", label: "Vercel" },
+          ],
+        });
+      },
+      template: () =>
+        p.select({
+          message: "Select a template:",
+          options: [
+            { value: "standard", label: "Default (Standard MCP server)" },
+          ],
+        }),
+      confirm: ({ results }) =>
+        p.confirm({
+          message: `Creating a new redop app in ${chalk.cyan(
+            path.resolve(process.cwd(), results.name as string)
+          )}. Ok to continue?`,
+        }),
     },
     {
       onCancel: () => {
