@@ -1,0 +1,49 @@
+---
+title: JWT Authentication
+description: Validate bearer JWTs with the built-in jwt plugin.
+---
+
+Use `jwt(...)` when your clients already send bearer tokens and you want Redop to verify them on each HTTP request.
+
+## Shared secret example
+
+```ts
+import { jwt, Redop } from "@useagents/redop";
+
+new Redop({ name: "jwt-demo" }).use(
+  jwt({
+    secret: process.env.JWT_SECRET ?? "dev-jwt-secret",
+    issuer: "https://auth.example.com",
+    audience: "my-mcp-server",
+  }),
+);
+```
+
+## JWKS example
+
+```ts
+new Redop({ name: "jwt-demo" }).use(
+  jwt({
+    jwksUri: "https://auth.example.com/.well-known/jwks.json",
+    issuer: "https://auth.example.com",
+    audience: "my-mcp-server",
+  }),
+);
+```
+
+## Optional auth
+
+```ts
+new Redop({ name: "jwt-demo" }).use(
+  jwt({
+    secret: process.env.JWT_SECRET ?? "dev-jwt-secret",
+    optional: true,
+  }),
+);
+```
+
+## See also
+
+- [API key authentication](/guides/authentication/api-key)
+- [OAuth authentication](/guides/authentication/oauth)
+- [Built-in plugins reference](/reference/built-in-plugins)

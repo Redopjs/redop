@@ -18,56 +18,80 @@
         "group": "Getting Started",
         "pages": [
           "getting-started/installation",
+          "getting-started/create-redop-app",
           "getting-started/first-server",
-          "getting-started/transports",
-          "getting-started/typed-zod-tool"
+          "getting-started/connect-http",
+          "getting-started/connect-stdio",
+          "getting-started/verify-clients"
         ]
       },
       {
-        "group": "Core Concepts",
+        "group": "Tutorials",
         "pages": [
-          "core-concepts/tools",
-          "core-concepts/handler-event",
-          "core-concepts/middleware",
-          "core-concepts/lifecycle-hooks",
-          "core-concepts/groups"
+          "tutorials/build-http-server",
+          "tutorials/add-zod-tool",
+          "tutorials/add-middleware-hooks",
+          "tutorials/add-http-auth",
+          "tutorials/scaffold-and-ship"
         ]
       },
       {
-        "group": "Plugins",
-        "pages": ["plugins/using-plugins", "plugins/authoring-plugins"]
-      },
-      {
-        "group": "Authentication & Control Flow",
+        "group": "How-To Guides",
         "pages": [
-          "authentication/api-key",
-          "authentication/bearer",
-          "authentication/control-flow"
+          "guides/choose-transport",
+          "guides/add-request-context",
+          "guides/organize-tools-with-group",
+          "guides/register-resources",
+          "guides/register-prompts",
+          "guides/notify-resource-changes",
+          {
+            "group": "Authentication",
+            "pages": [
+              "guides/authentication/api-key",
+              "guides/authentication/jwt",
+              "guides/authentication/oauth"
+            ]
+          },
+          "guides/logger-plugin",
+          "guides/build-plugin-or-middleware",
+          "guides/debug-http",
+          {
+            "group": "Deploy to Production",
+            "pages": [
+              "guides/deploy/index",
+              "guides/deploy/railway",
+              "guides/deploy/fly-io",
+              "guides/deploy/docker",
+              "guides/deploy/vercel"
+            ]
+          },
+          "guides/create-redop-app-presets"
         ]
       },
       {
-        "group": "Examples",
-        "pages": ["examples/with-zod", "examples/plugins", "examples/basic"]
-      },
-      {
-        "group": "Deploy to Production",
+        "group": "Concepts",
         "pages": [
-          "deployment/overview",
-          "deployment/bun-runtime",
-          "deployment/railway",
-          "deployment/fly-io",
-          "deployment/vercel"
+          "concepts/mental-model",
+          "concepts/lifecycle",
+          "concepts/composition",
+          "concepts/schemas",
+          "concepts/resources-prompts",
+          "concepts/transports"
         ]
       },
       {
         "group": "Reference",
         "pages": [
           "reference/redop",
+          "reference/listen-options",
           "reference/tool-definition",
+          "reference/request-context",
+          "reference/resource-definition",
+          "reference/prompt-definition",
+          "reference/built-in-plugins",
           "reference/schema-adapters",
-          "reference/built-ins",
-          "reference/lifecycle",
-          "reference/http-routes"
+          "reference/http-transport",
+          "reference/create-redop-app-cli"
         ]
       }
     ]

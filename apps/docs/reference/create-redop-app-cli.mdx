@@ -1,0 +1,83 @@
+---
+title: create-redop-app CLI Reference
+description: Reference for the create-redop-app command, flags, interactive prompts, and generated files.
+---
+
+## Basic usage
+
+```sh
+bun create redop-app my-redop-app
+```
+
+## Direct CLI usage
+
+```sh
+bunx create-redop-app my-redop-app --transport http --deploy railway
+```
+
+You can also preselect starter components:
+
+```sh
+bunx create-redop-app my-redop-app --components tools,resources,prompts
+```
+
+And choose the schema library for the generated tool example:
+
+```sh
+bunx create-redop-app my-redop-app --schema typebox
+```
+
+## Arguments
+
+| Argument | Purpose |
+| -------- | ------- |
+| `[dir]` | Target directory for the generated project. |
+
+## Flags
+
+| Flag | Purpose |
+| ---- | ------- |
+| `-t, --transport <type>` | Transport type: `http` or `stdio`. |
+| `-c, --components <items>` | Comma-separated starter components: `tools`, `resources`, `prompts`. |
+| `-s, --schema <library>` | Schema library for generated tool inputs: `zod`, `json-schema`, `valibot`, `typebox`. |
+| `-d, --deploy <target>` | Deploy target: `none`, `railway`, `fly-io`, or `vercel`. |
+
+## Interactive flow
+
+The current prompt flow asks for:
+
+- project name
+- package manager
+- schema library
+- starter components
+- transport
+- deploy target when the transport is HTTP
+
+## Generated files
+
+Always generated:
+
+- `.gitignore`
+- `README.md`
+- `package.json`
+- `tsconfig.json`
+- `src/index.ts`
+
+Generated starter code can include:
+
+- `.tool(...)`
+- `.resource(...)`
+- `.prompt(...)`
+
+When tools are included, the generated example uses the selected schema library:
+
+- `zod`
+- `json-schema`
+- `valibot`
+- `typebox`
+
+Generated for deploy presets:
+
+- `Dockerfile`
+- `fly.toml`
+- `vercel.json`

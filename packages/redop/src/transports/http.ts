@@ -1,478 +1,1061 @@
-/** biome-ignore-all lint/style/noNestedTernary: <explanation> */
-//  redop — HTTP transport (Bun-native)
+// ─────────────────────────────────────────────
+//  redop — HTTP transport (Streamable HTTP 2025-11-25)
 // ─────────────────────────────────────────────
 
 import type {
+  CapabilityOptions,
   JsonRpcRequest,
   JsonRpcResponse,
   ListenOptions,
+  PromptHandlerResult,
   RequestMeta,
+  ResolvedPrompt,
+  ResolvedResource,
   ResolvedTool,
+  ResourceContents,
   ServerInfoOptions,
 } from "../types";
+import uiHtml from "../ui/index.html";
 
-// ── Session store ─────────────────────────────
+// ── Task types ────────────────────────────────
 
-interface Session {
-  createdAt: number;
-  id: string;
-  lastSeen: number;
+type TaskStatus =
+  | "working"
+  | "input_required"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
+interface StoredTask {
+  createdAt: string;
+  lastUpdatedAt: string;
+  pollInterval?: number;
+  result?: Record<string, unknown>;
+  rpcError?: { code: number; message: string };
+  status: TaskStatus;
+  statusMessage?: string;
+  taskId: string;
+  ttl: number | null;
+  waiters: Array<() => void>;
 }
 
-function createSessionStore(timeoutMs: number) {
-  const sessions = new Map<string, Session>();
+// ── Helpers ───────────────────────────────────
 
-  function gc() {
+function isoNow() {
+  return new Date().toISOString();
+}
+
+function taskPublic(t: StoredTask) {
+  const { waiters: _w, result: _r, rpcError: _e, ...pub } = t;
+  return pub;
+}
+
+const TERMINAL = new Set<TaskStatus>(["completed", "failed", "cancelled"]);
+const isTerminal = (s: TaskStatus) => TERMINAL.has(s);
+
+function isOriginAllowed(origin: string | null, serverUrl: string): boolean {
+  if (!origin) {
+    return true;
+  }
+  try {
+    const o = new URL(origin);
+    const s = new URL(serverUrl);
+    if (o.hostname === s.hostname) {
+      return true;
+    }
+    const loopback = new Set(["localhost", "127.0.0.1", "::1"]);
+    if (loopback.has(s.hostname) && loopback.has(o.hostname)) {
+      return true;
+    }
+    // Allow common local dev ports for inspectors
+    if (o.hostname === "localhost" || o.hostname === "127.0.0.1") {
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+// ── Session + task store ──────────────────────
+
+function createStore(sessionTimeoutMs: number) {
+  const sessions = new Map<string, { lastSeen: number }>();
+  const tasks = new Map<string, StoredTask>();
+
+  const timer = setInterval(() => {
     const now = Date.now();
     for (const [id, s] of sessions) {
-      if (now - s.lastSeen > timeoutMs) {
+      if (now - s.lastSeen > sessionTimeoutMs) {
         sessions.delete(id);
       }
     }
-  }
-
-  // GC every 30 seconds
-  const gcTimer = setInterval(gc, 30_000);
+    for (const [, t] of tasks) {
+      if (t.ttl === null) {
+        continue;
+      }
+      if (now - new Date(t.createdAt).getTime() > t.ttl) {
+        for (const w of t.waiters) {
+          w();
+        }
+        tasks.delete(t.taskId);
+      }
+    }
+  }, 30_000);
 
   return {
-    create(): string {
-      const id = crypto.randomUUID();
-      sessions.set(id, { createdAt: Date.now(), id, lastSeen: Date.now() });
-      return id;
+    sessions: {
+      create() {
+        const id = crypto.randomUUID();
+        sessions.set(id, { lastSeen: Date.now() });
+        return id;
+      },
+      ensure(id: string) {
+        const existing = sessions.get(id);
+        if (existing) {
+          existing.lastSeen = Date.now();
+          return id;
+        }
+        sessions.set(id, { lastSeen: Date.now() });
+        return id;
+      },
+      touch(id: string) {
+        const s = sessions.get(id);
+        if (!s) {
+          return false;
+        }
+        s.lastSeen = Date.now();
+        return true;
+      },
+      has(id: string) {
+        return sessions.has(id);
+      },
+      delete(id: string) {
+        sessions.delete(id);
+      },
     },
-    delete(id: string) {
-      sessions.delete(id);
+    tasks: {
+      create(ttl?: number): StoredTask {
+        const now = isoNow();
+        const t: StoredTask = {
+          taskId: crypto.randomUUID(),
+          status: "working",
+          createdAt: now,
+          lastUpdatedAt: now,
+          ttl: ttl ?? null,
+          pollInterval: 2000,
+          waiters: [],
+        };
+        tasks.set(t.taskId, t);
+        return t;
+      },
+      get(id: string) {
+        return tasks.get(id);
+      },
+      complete(id: string, result: Record<string, unknown>) {
+        const t = tasks.get(id);
+        if (!t || isTerminal(t.status)) {
+          return;
+        }
+        t.status = "completed";
+        t.lastUpdatedAt = isoNow();
+        t.result = result;
+        this._wake(t);
+      },
+      fail(id: string, error: string | { code: number; message: string }) {
+        const t = tasks.get(id);
+        if (!t || isTerminal(t.status)) {
+          return;
+        }
+        t.status = "failed";
+        t.lastUpdatedAt = isoNow();
+        if (typeof error === "string") {
+          t.statusMessage = error;
+          t.result = {
+            content: [{ type: "text", text: error }],
+            isError: true,
+          };
+        } else {
+          t.rpcError = error;
+          t.statusMessage = error.message;
+        }
+        this._wake(t);
+      },
+      cancel(id: string) {
+        const t = tasks.get(id);
+        if (!t || isTerminal(t.status)) {
+          return false;
+        }
+        t.status = "cancelled";
+        t.lastUpdatedAt = isoNow();
+        t.statusMessage = "Cancelled by request.";
+        this._wake(t);
+        return true;
+      },
+      list(cursor?: string, limit = 50) {
+        const all = [...tasks.values()];
+        const start = cursor ? Number.parseInt(cursor) : 0;
+        const page = all.slice(start, start + limit);
+        return {
+          tasks: page.map(taskPublic),
+          nextCursor:
+            start + limit < all.length ? String(start + limit) : undefined,
+        };
+      },
+      waitForCompletion(id: string): Promise<StoredTask | null> {
+        return new Promise((resolve) => {
+          const t = tasks.get(id);
+          if (!t) {
+            resolve(null);
+            return;
+          }
+          if (isTerminal(t.status)) {
+            resolve(t);
+            return;
+          }
+          t.waiters.push(() => resolve(tasks.get(id) ?? null));
+        });
+      },
+      _wake(t: StoredTask) {
+        for (const w of t.waiters) {
+          w();
+        }
+        t.waiters = [];
+      },
     },
     stop() {
-      clearInterval(gcTimer);
-    },
-    touch(id: string): boolean {
-      const s = sessions.get(id);
-      if (!s) {
-        return false;
-      }
-      s.lastSeen = Date.now();
-      return true;
+      clearInterval(timer);
     },
   };
 }
 
-// ── CORS helpers ──────────────────────────────
+// ── JSON-RPC Handlers Map ─────────────────────────
 
-function buildCorsHeaders(
-  cors: ListenOptions["cors"],
-  requestOrigin?: string | null
-): Record<string, string> {
-  if (!cors) {
-    return {};
-  }
+interface RpcContext {
+  caps: Required<CapabilityOptions>;
+  getPrompt: (
+    name: string,
+    args: Record<string, string> | undefined,
+    req: RequestMeta
+  ) => Promise<PromptHandlerResult>;
+  prompts: Map<string, ResolvedPrompt>;
+  protocolVersion: SupportedVersion;
+  readResource: (uri: string, req: RequestMeta) => Promise<ResourceContents>;
+  requestMeta: RequestMeta;
+  resources: Map<string, ResolvedResource>;
+  runTool: (
+    name: string,
+    args: Record<string, unknown>,
+    meta: RequestMeta
+  ) => Promise<unknown>;
+  serverInfo: Required<ServerInfoOptions>;
+  sessionId: string;
+  store: ReturnType<typeof createStore>;
+  subscribeRes: (uri: string, sid: string) => void;
+  tools: Map<string, ResolvedTool>;
+  unsubscribeRes: (uri: string, sid: string) => void;
+}
 
-  if (cors === true) {
-    return {
-      "Access-Control-Allow-Credentials": "true",
-      "Access-Control-Allow-Headers":
-        "Content-Type, Authorization, X-API-Key, Mcp-Session-Id",
-      "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
-      "Access-Control-Allow-Origin": requestOrigin ?? "*",
+type RpcResponsePayload = {
+  result?: any;
+  error?: { code: number; message: string };
+};
+type RpcHandler = (
+  params: any,
+  ctx: RpcContext
+) => Promise<RpcResponsePayload> | RpcResponsePayload;
+
+const RPC_HANDLERS: Record<string, RpcHandler> = {
+  initialize: (params, ctx) => {
+    const capabilities: Record<string, unknown> = {};
+    if (ctx.caps.tools) {
+      capabilities.tools = { listChanged: true };
+    }
+    if (ctx.caps.resources) {
+      capabilities.resources = { subscribe: true, listChanged: true };
+    }
+    if (ctx.caps.prompts) {
+      capabilities.prompts = { listChanged: true };
+    }
+    capabilities.tasks = {
+      list: {},
+      cancel: {},
+      requests: { tools: { call: {} } },
     };
-  }
 
-  const origins = Array.isArray(cors.origins)
-    ? cors.origins
-    : cors.origins
-      ? [cors.origins]
-      : ["*"];
+    return {
+      result: {
+        protocolVersion: ctx.protocolVersion,
+        capabilities,
+        serverInfo: ctx.serverInfo,
+        instructions: ctx.serverInfo.instructions,
+        sessionId: ctx.sessionId,
+      },
+    };
+  },
 
-  const allowedOrigin =
-    requestOrigin && origins.includes(requestOrigin)
-      ? requestOrigin
-      : (origins[0] ?? "*");
+  ping: () => {
+    return { result: {} };
+  },
 
-  return {
-    "Access-Control-Allow-Credentials": String(cors.credentials ?? true),
-    "Access-Control-Allow-Headers": (
-      cors.headers ?? [
-        "Content-Type",
-        "Authorization",
-        "X-API-Key",
-        "Mcp-Session-Id",
-      ]
-    ).join(", "),
-    "Access-Control-Allow-Methods": (
-      cors.methods ?? ["GET", "POST", "DELETE", "OPTIONS"]
-    ).join(", "),
-    "Access-Control-Allow-Origin": allowedOrigin,
-  };
-}
+  "tools/list": (params, ctx) => {
+    if (!ctx.caps.tools) {
+      return {
+        error: { code: -32_601, message: "Tools capability not enabled" },
+      };
+    }
+    return {
+      result: {
+        tools: [...ctx.tools.values()].map((t) => ({
+          name: t.name,
+          description: t.description ?? "",
+          inputSchema: t.inputSchema,
+          ...(t.title ? { title: t.title } : {}),
+          ...(t.icons?.length ? { icons: t.icons } : {}),
+          ...(t.outputSchema ? { outputSchema: t.outputSchema } : {}),
+          ...(t.annotations ? { annotations: t.annotations } : {}),
+          execution: { taskSupport: t.taskSupport ?? "optional" },
+        })),
+      },
+    };
+  },
 
-// ── MCP JSON-RPC handler ──────────────────────
+  "tools/call": async (params, ctx) => {
+    if (!ctx.caps.tools) {
+      return {
+        error: { code: -32_601, message: "Tools capability not enabled" },
+      };
+    }
+    const p = params as {
+      name: string;
+      arguments?: unknown;
+      task?: { ttl?: number };
+      _meta?: { progressToken?: string | number };
+    };
+    const tool = ctx.tools.get(p.name);
+    if (!tool) {
+      return { error: { code: -32_602, message: `Unknown tool: ${p.name}` } };
+    }
 
-type ToolRunner = (
-  toolName: string,
-  args: Record<string, unknown>,
-  requestMeta: RequestMeta
-) => Promise<unknown>;
+    if (p.task !== undefined) {
+      const task = ctx.store.tasks.create(p.task?.ttl);
+      (async () => {
+        try {
+          const raw = await ctx.runTool(
+            p.name,
+            (p.arguments ?? {}) as Record<string, unknown>,
+            ctx.requestMeta
+          );
+          const result: Record<string, unknown> = {
+            content: [{ type: "text", text: JSON.stringify(raw) }],
+            _meta: {
+              "io.modelcontextprotocol/related-task": { taskId: task.taskId },
+            },
+          };
+          if (tool.outputSchema && raw !== null && typeof raw === "object") {
+            result.structuredContent = raw;
+          }
+          ctx.store.tasks.complete(task.taskId, result);
+        } catch (e) {
+          ctx.store.tasks.fail(task.taskId, String(e));
+        }
+      })();
+      return { result: { task: taskPublic(task) } };
+    }
 
-function getRequestHeaders(headers: Headers): Record<string, string> {
-  return Object.fromEntries(
-    [...headers.entries()].map(([key, value]) => [key.toLowerCase(), value])
-  );
-}
+    try {
+      const raw = await ctx.runTool(
+        p.name,
+        (p.arguments ?? {}) as Record<string, unknown>,
+        ctx.requestMeta
+      );
+      const result: Record<string, unknown> = {
+        content: [{ type: "text", text: JSON.stringify(raw) }],
+      };
+      if (tool.outputSchema && raw !== null && typeof raw === "object") {
+        result.structuredContent = raw;
+      }
+      return { result };
+    } catch (e) {
+      return {
+        result: { content: [{ type: "text", text: String(e) }], isError: true },
+      };
+    }
+  },
+
+  "resources/list": (params, ctx) => {
+    if (!ctx.caps.resources) {
+      return {
+        error: { code: -32_601, message: "Resources capability not enabled" },
+      };
+    }
+    const staticRes = [...ctx.resources.values()].filter((r) => !r.isTemplate);
+    return {
+      result: {
+        resources: staticRes.map((r) => ({
+          uri: r.uri,
+          name: r.name,
+          ...(r.description ? { description: r.description } : {}),
+          ...(r.mimeType ? { mimeType: r.mimeType } : {}),
+          ...(r.icons?.length ? { icons: r.icons } : {}),
+        })),
+      },
+    };
+  },
+
+  "resources/templates/list": (params, ctx) => {
+    if (!ctx.caps.resources) {
+      return {
+        error: { code: -32_601, message: "Resources capability not enabled" },
+      };
+    }
+    const templateRes = [...ctx.resources.values()].filter((r) => r.isTemplate);
+    return {
+      result: {
+        resourceTemplates: templateRes.map((r) => ({
+          uriTemplate: r.uri,
+          name: r.name,
+          ...(r.description ? { description: r.description } : {}),
+          ...(r.mimeType ? { mimeType: r.mimeType } : {}),
+        })),
+      },
+    };
+  },
+
+  "resources/read": async (params, ctx) => {
+    if (!ctx.caps.resources) {
+      return {
+        error: { code: -32_601, message: "Resources capability not enabled" },
+      };
+    }
+    const uri = params?.uri as string | undefined;
+    if (!uri) {
+      return { error: { code: -32_602, message: "Missing uri param" } };
+    }
+    try {
+      const contents = await ctx.readResource(uri, ctx.requestMeta);
+      const wireContent =
+        contents.type === "text"
+          ? { uri, mimeType: contents.mimeType, text: contents.text }
+          : { uri, mimeType: contents.mimeType, blob: contents.blob };
+      return { result: { contents: [wireContent] } };
+    } catch (e) {
+      return { error: { code: -32_602, message: String(e) } };
+    }
+  },
+
+  "resources/subscribe": (params, ctx) => {
+    if (!ctx.caps.resources) {
+      return {
+        error: { code: -32_601, message: "Resources capability not enabled" },
+      };
+    }
+    const uri = params?.uri as string | undefined;
+    if (!uri) {
+      return { error: { code: -32_602, message: "Missing uri" } };
+    }
+    ctx.subscribeRes(uri, ctx.sessionId);
+    return { result: {} };
+  },
+
+  "resources/unsubscribe": (params, ctx) => {
+    if (!ctx.caps.resources) {
+      return {
+        error: { code: -32_601, message: "Resources capability not enabled" },
+      };
+    }
+    const uri = params?.uri as string | undefined;
+    if (!uri) {
+      return { error: { code: -32_602, message: "Missing uri" } };
+    }
+    ctx.unsubscribeRes(uri, ctx.sessionId);
+    return { result: {} };
+  },
+
+  "prompts/list": (params, ctx) => {
+    if (!ctx.caps.prompts) {
+      return {
+        error: { code: -32_601, message: "Prompts capability not enabled" },
+      };
+    }
+    return {
+      result: {
+        prompts: [...ctx.prompts.values()].map((p) => ({
+          name: p.name,
+          ...(p.description ? { description: p.description } : {}),
+          ...(p.arguments?.length ? { arguments: p.arguments } : {}),
+        })),
+      },
+    };
+  },
+
+  "prompts/get": async (params, ctx) => {
+    if (!ctx.caps.prompts) {
+      return {
+        error: { code: -32_601, message: "Prompts capability not enabled" },
+      };
+    }
+    const name = params?.name as string | undefined;
+    const args = params?.arguments as Record<string, string> | undefined;
+    if (!name) {
+      return { error: { code: -32_602, message: "Missing name" } };
+    }
+    try {
+      const raw = await ctx.getPrompt(name, args, ctx.requestMeta);
+      const result = Array.isArray(raw) ? { messages: raw } : raw;
+      return { result };
+    } catch (e) {
+      return { error: { code: -32_602, message: String(e) } };
+    }
+  },
+
+  "tasks/get": (params, ctx) => {
+    const task = ctx.store.tasks.get(params?.taskId);
+    if (!task) {
+      return { error: { code: -32_602, message: "Task not found" } };
+    }
+    return { result: taskPublic(task) };
+  },
+
+  "tasks/result": async (params, ctx) => {
+    const taskId = params?.taskId;
+    const task = ctx.store.tasks.get(taskId);
+    if (!task) {
+      return { error: { code: -32_602, message: "Task not found" } };
+    }
+    const final = await ctx.store.tasks.waitForCompletion(taskId);
+    if (!final) {
+      return { error: { code: -32_602, message: "Task expired" } };
+    }
+    if (final.rpcError) {
+      return { error: final.rpcError };
+    }
+    return {
+      result: {
+        ...final.result,
+        _meta: { "io.modelcontextprotocol/related-task": { taskId } },
+      },
+    };
+  },
+
+  "tasks/list": (params, ctx) => {
+    const { tasks: taskList, nextCursor } = ctx.store.tasks.list(
+      params?.cursor
+    );
+    return {
+      result: nextCursor
+        ? { tasks: taskList, nextCursor }
+        : { tasks: taskList },
+    };
+  },
+
+  "tasks/cancel": (params, ctx) => {
+    const taskId = params?.taskId;
+    const task = ctx.store.tasks.get(taskId);
+    if (!task) {
+      return { error: { code: -32_602, message: "Task not found" } };
+    }
+    if (isTerminal(task.status)) {
+      return {
+        error: {
+          code: -32_602,
+          message: `Already in terminal status '${task.status}'`,
+        },
+      };
+    }
+    ctx.store.tasks.cancel(taskId);
+    return { result: taskPublic(ctx.store.tasks.get(taskId)!) };
+  },
+};
+
+// ── JSON-RPC dispatcher ───────────────────────
 
 async function handleJsonRpc(
   body: JsonRpcRequest,
   tools: Map<string, ResolvedTool>,
-  runner: ToolRunner,
+  resources: Map<string, ResolvedResource>,
+  prompts: Map<string, ResolvedPrompt>,
+  runTool: (
+    name: string,
+    args: Record<string, unknown>,
+    meta: RequestMeta
+  ) => Promise<unknown>,
+  readResource: (uri: string, req: RequestMeta) => Promise<ResourceContents>,
+  getPrompt: (
+    name: string,
+    args: Record<string, string> | undefined,
+    req: RequestMeta
+  ) => Promise<PromptHandlerResult>,
+  subscribeRes: (uri: string, sid: string) => void,
+  unsubscribeRes: (uri: string, sid: string) => void,
   requestMeta: RequestMeta,
   serverInfo: Required<ServerInfoOptions>,
-  sessionId: string
+  caps: Required<CapabilityOptions>,
+  store: ReturnType<typeof createStore>,
+  sessionId: string,
+  protocolVersion: SupportedVersion
 ): Promise<JsonRpcResponse> {
   const { id, method, params } = body;
+  const handler = RPC_HANDLERS[method];
 
-  // ── initialize ──
-  if (method === "initialize") {
-    const { name, title, version, description, icons, websiteUrl } = serverInfo;
-
+  if (!handler) {
     return {
       id,
       jsonrpc: "2.0",
-      result: {
-        protocolVersion: "2024-11-05",
-        capabilities: { tools: { listChanged: false } },
-        serverInfo: {
-          name,
-          version,
-          ...(title ? { title } : {}),
-          ...(description ? { description } : {}),
-          ...(icons?.length ? { icons } : {}),
-          ...(websiteUrl ? { websiteUrl } : {}),
-        },
-        // instructions lives at the top level of InitializeResult, not inside serverInfo
-        ...(serverInfo.instructions
-          ? { instructions: serverInfo.instructions }
-          : {}),
-        sessionId,
-      },
+      error: { code: -32_601, message: "Method not found" },
     };
   }
 
-  // ── ping ──
-  if (method === "ping") {
-    return { id, jsonrpc: "2.0", result: {} };
-  }
-
-  // ── tools/list ──
-  if (method === "tools/list") {
-    return {
-      id,
-      jsonrpc: "2.0",
-      result: {
-        tools: [...tools.values()].map((t) => ({
-          description: t.description ?? "",
-          inputSchema: t.inputSchema,
-          name: t.name,
-          ...(t.annotations ? { annotations: t.annotations } : {}),
-        })),
-      },
-    };
-  }
-
-  // ── tools/call ──
-  if (method === "tools/call") {
-    const p = params as { name?: string; arguments?: Record<string, unknown> };
-    const toolName = p?.name;
-
-    if (!(toolName && tools.has(toolName))) {
-      return {
-        error: {
-          code: -32_602,
-          message: `Unknown tool: ${toolName ?? "(none)"}`,
-        },
-        id,
-        jsonrpc: "2.0",
-      };
-    }
-
-    try {
-      const result = await runner(toolName, p?.arguments ?? {}, requestMeta);
-      return {
-        id,
-        jsonrpc: "2.0",
-        result: {
-          content: [{ text: JSON.stringify(result), type: "text" }],
-          isError: false,
-        },
-      };
-    } catch (error) {
-      return {
-        id,
-        jsonrpc: "2.0",
-        result: {
-          content: [
-            {
-              text: String(error instanceof Error ? error.message : error),
-              type: "text",
-            },
-          ],
-          isError: true,
-        },
-      };
-    }
-  }
-
-  return {
-    error: { code: -32_601, message: `Method not found: ${method}` },
-    id,
-    jsonrpc: "2.0",
+  // Pack variables into a context object for the handler
+  const ctx: RpcContext = {
+    tools,
+    resources,
+    prompts,
+    runTool,
+    readResource,
+    getPrompt,
+    subscribeRes,
+    unsubscribeRes,
+    requestMeta,
+    serverInfo,
+    caps,
+    store,
+    sessionId,
+    protocolVersion,
   };
+
+  try {
+    const responsePayload = await handler(params, ctx);
+    return { id, jsonrpc: "2.0", ...responsePayload };
+  } catch (err) {
+    return {
+      id,
+      jsonrpc: "2.0",
+      error: { code: -32_603, message: `Internal error: ${err}` },
+    };
+  }
 }
 
-// ── Origin validation ─────────────────────────
-function isOriginAllowed(
-  origin: string | null,
-  cors: ListenOptions["cors"],
-  hostname: string,
-  port: number
-): boolean {
-  // Non-browser clients don't send Origin — not a DNS rebinding risk.
-  if (!origin) {
-    return true;
+// ── HTTP transport ────────────────────────────
+
+const SUPPORTED_VERSIONS = ["2025-11-25", "2025-03-26", "2024-11-05"] as const;
+type SupportedVersion = (typeof SUPPORTED_VERSIONS)[number];
+
+function negotiateVersion(clientVersion: string | undefined): SupportedVersion {
+  if (!clientVersion) {
+    return SUPPORTED_VERSIONS[0];
   }
-
-  // cors: true  →  permissive dev mode, mirror any origin
-  if (cors === true) {
-    return true;
-  }
-
-  // cors: false/undefined  →  default to localhost-only
-  if (!cors) {
-    return [
-      `http://${hostname}:${port}`,
-      `http://localhost:${port}`,
-      `http://127.0.0.1:${port}`,
-    ].includes(origin);
-  }
-
-  // cors: CorsOptions  →  validate against origins allowlist
-  const origins = cors.origins
-    ? Array.isArray(cors.origins)
-      ? cors.origins
-      : [cors.origins]
-    : ["*"];
-
-  // "*" in the list means explicitly open — treat like dev mode
-  if (origins.includes("*")) {
-    return true;
-  }
-
-  return origins.includes(origin);
+  const match = SUPPORTED_VERSIONS.find((version) => version === clientVersion);
+  return match ?? SUPPORTED_VERSIONS[0];
 }
-
-// ── HTTP server ───────────────────────────────
 
 export function startHttpTransport(
   tools: Map<string, ResolvedTool>,
-  runner: ToolRunner,
+  resources: Map<string, ResolvedResource>,
+  prompts: Map<string, ResolvedPrompt>,
+  runTool: (
+    name: string,
+    args: Record<string, unknown>,
+    meta: RequestMeta
+  ) => Promise<unknown>,
+  readResource: (uri: string, req: RequestMeta) => Promise<ResourceContents>,
+  getPrompt: (
+    name: string,
+    args: Record<string, string> | undefined,
+    req: RequestMeta
+  ) => Promise<PromptHandlerResult>,
+  subscribeRes: (uri: string, sid: string) => void,
+  unsubscribeRes: (uri: string, sid: string) => void,
   opts: ListenOptions,
-  serverInfo: Required<ServerInfoOptions>
+  serverInfo: Required<ServerInfoOptions>,
+  caps: Required<CapabilityOptions>
 ) {
   const port = Number(opts.port ?? 3000);
   const hostname = opts.hostname ?? "127.0.0.1";
+  const debug = opts.debug ?? false;
+  const store = createStore(opts.sessionTimeout ?? 60_000);
   const mcpPath = opts.path ?? "/mcp";
-  const sessionTimeout = opts.sessionTimeout ?? 30_000;
-  const maxBodySize = opts.maxBodySize ?? 4 * 1024 * 1024;
-  const sessions = createSessionStore(sessionTimeout);
+  const healthPath =
+    opts.health === true
+      ? "/health"
+      : opts.health && typeof opts.health === "object"
+        ? (() => {
+            const path = opts.health.path?.trim() || "/health";
+            return path.startsWith("/") ? path : `/${path}`;
+          })()
+        : null;
+  const sseClients = new Map<
+    string,
+    ReadableStreamDefaultController<Uint8Array>
+  >();
+  const enc = new TextEncoder();
+  const devUIEnabled = opts.devUI ?? process.env.NODE_ENV !== "production";
 
-  // SSE clients: sessionId → controller
-  const sseClients = new Map<string, ReadableStreamDefaultController>();
+  if (healthPath && healthPath === mcpPath) {
+    throw new Error("[redop:http] health path cannot match the MCP path");
+  }
+
+  function debugLog(event: string, data: Record<string, unknown>) {
+    if (!debug) {
+      return;
+    }
+    console.error(`[redop:http] ${event}`, data);
+  }
+
+  function sseChunk(data: string) {
+    return enc.encode(data);
+  }
+
+  function pushSse(sid: string, data: unknown) {
+    const ctrl = sseClients.get(sid);
+    if (!ctrl) {
+      return;
+    }
+    ctrl.enqueue(
+      sseChunk(`id: ${crypto.randomUUID()}\ndata: ${JSON.stringify(data)}\n\n`)
+    );
+  }
+
+  function pushLegacyEndpointEvent(
+    ctrl: ReadableStreamDefaultController<Uint8Array>,
+    sessionId: string,
+    origin: string
+  ) {
+    ctrl.enqueue(
+      sseChunk(
+        `event: endpoint\ndata: ${JSON.stringify({ sessionId, uri: `${origin}${mcpPath}` })}\n\n`
+      )
+    );
+  }
 
   const server = Bun.serve({
     port,
     hostname,
-    ...(opts.tls ? { tls: opts.tls } : {}),
+    idleTimeout: 255,
+    ...(devUIEnabled
+      ? {
+          routes: {
+            "/": uiHtml,
+          },
+        }
+      : {}),
 
-    async fetch(req, server) {
+    development: devUIEnabled,
+    async fetch(req) {
       const url = new URL(req.url);
       const origin = req.headers.get("origin");
-      const corsHeaders = buildCorsHeaders(opts.cors, origin);
+      const ver = req.headers.get("mcp-protocol-version");
+      const incomingSessionId = req.headers.get("mcp-session-id");
 
-      // ── Preflight ──
-      if (req.method === "OPTIONS") {
-        return new Response(null, { headers: corsHeaders, status: 204 });
-      }
+      debugLog("request", {
+        method: req.method,
+        url: req.url,
+        protocolVersion: ver,
+        sessionId: incomingSessionId,
+        accept: req.headers.get("accept"),
+        origin,
+      });
 
-      // ── Origin guard (DNS-rebinding protection) ──
-      if (!isOriginAllowed(origin, opts.cors, hostname, port)) {
+      // Origin guard (DNS-rebinding)
+      if (!isOriginAllowed(origin, req.url)) {
+        debugLog("forbidden_origin", { origin, url: req.url });
         return new Response(
           JSON.stringify({
-            error: { code: -32_600, message: "Forbidden: invalid Origin" },
-            id: null,
             jsonrpc: "2.0",
+            id: null,
+            error: { code: -32_600, message: "Forbidden" },
           }),
-          {
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-            status: 403,
-          }
+          { status: 403, headers: { "Content-Type": "application/json" } }
         );
       }
 
-      // ── Health check ──
-      if (req.method === "GET" && url.pathname === `${mcpPath}/health`) {
-        return Response.json(
-          { ok: true, tools: tools.size },
-          { headers: corsHeaders }
-        );
-      }
-
-      // ── SSE stream (GET /mcp) ──
-      if (req.method === "GET" && url.pathname === mcpPath) {
-        const incomingSessionId = req.headers.get("mcp-session-id") ?? "";
-        const sessionId =
-          incomingSessionId && sessions.touch(incomingSessionId)
-            ? incomingSessionId
-            : sessions.create();
-
-        let heartbeat: ReturnType<typeof setInterval>;
-
-        const stream = new ReadableStream({
-          cancel() {
-            clearInterval(heartbeat);
-            sseClients.delete(sessionId);
-            sessions.delete(sessionId);
-          },
-          start(controller) {
-            sseClients.set(sessionId, controller);
-
-            const encode = (s: string) => new TextEncoder().encode(s);
-
-            // Initial endpoint event
-            controller.enqueue(
-              encode(
-                `event: endpoint\ndata: ${JSON.stringify({
-                  sessionId,
-                  uri: `${url.origin}${mcpPath}`,
-                })}\n\n`
-              )
-            );
-
-            // Keep-alive: SSE comment every 15s
-            heartbeat = setInterval(() => {
-              try {
-                controller.enqueue(encode(": ping\n\n"));
-              } catch {
-                // Stream already closed — cancel() will clean up
-                clearInterval(heartbeat);
-              }
-            }, 15_000);
-          },
-        });
-
-        return new Response(stream, {
+      // CORS preflight
+      if (req.method === "OPTIONS") {
+        debugLog("preflight", { url: req.url });
+        return new Response(null, {
+          status: 204,
           headers: {
-            ...corsHeaders,
-            "Cache-Control": "no-cache",
-            Connection: "keep-alive",
-            "Content-Type": "text/event-stream",
-            "Mcp-Session-Id": sessionId,
+            "Access-Control-Allow-Origin": origin ?? "*",
+            "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers":
+              "Content-Type, Accept, MCP-Session-Id, MCP-Protocol-Version, Last-Event-ID",
           },
         });
       }
 
-      // ── JSON-RPC (POST /mcp) ──
-      if (req.method === "POST" && url.pathname === mcpPath) {
-        // Body size guard
-        const contentLength = Number(req.headers.get("content-length") ?? 0);
-        if (contentLength > maxBodySize) {
-          return new Response("Payload Too Large", {
-            headers: corsHeaders,
-            status: 413,
-          });
+      // ── Provide the data the UI needs
+      if (
+        req.method === "GET" &&
+        url.pathname === "/_debug/data" &&
+        devUIEnabled
+      ) {
+        const data = {
+          capabilities: caps,
+          serverInfo,
+          tools: [...tools.values()],
+          resources: [...resources.values()],
+          prompts: [...prompts.values()],
+          mcpPath,
+        };
+        debugLog("debug_data", { url: req.url });
+        return Response.json(data);
+      }
+
+      if (
+        healthPath &&
+        (req.method === "GET" || req.method === "HEAD") &&
+        url.pathname === healthPath
+      ) {
+        debugLog("health", { method: req.method, path: url.pathname });
+        if (req.method === "HEAD") {
+          return new Response(null, { status: 200 });
         }
 
+        return Response.json({
+          ok: true,
+          mcpPath,
+          service: serverInfo.name,
+          transport: "http",
+        });
+      }
+
+      // Protocol version check
+      if (ver && !SUPPORTED_VERSIONS.includes(ver as SupportedVersion)) {
+        debugLog("unsupported_version", { url: req.url, protocolVersion: ver });
+        return Response.json(
+          { error: "Unsupported MCP-Protocol-Version" },
+          { status: 400 }
+        );
+      }
+
+      if (url.pathname !== mcpPath) {
+        debugLog("not_found", { method: req.method, path: url.pathname });
+        return new Response("Not Found", { status: 404 });
+      }
+
+      // DELETE — session termination
+      if (req.method === "DELETE") {
+        const sid = req.headers.get("mcp-session-id");
+        if (sid && store.sessions.has(sid)) {
+          debugLog("session_closed", { sessionId: sid });
+          store.sessions.delete(sid);
+          try {
+            sseClients.get(sid)?.close();
+          } catch {}
+          sseClients.delete(sid);
+          return Response.json(
+            { ok: true, sessionId: sid, terminated: true },
+            { status: 200 }
+          );
+        }
+        if (sid) {
+          debugLog("session_close_missing", { sessionId: sid });
+          return Response.json(
+            { ok: true, sessionId: sid, terminated: false },
+            { status: 200 }
+          );
+        }
+        debugLog("session_close_without_id", { url: req.url });
+        return Response.json(
+          { ok: true, sessionId: null, terminated: false },
+          { status: 200 }
+        );
+      }
+
+      // GET — SSE stream
+      if (req.method === "GET") {
+        if (!(req.headers.get("accept") ?? "").includes("text/event-stream")) {
+          debugLog("sse_not_acceptable", {
+            accept: req.headers.get("accept"),
+            sessionId: incomingSessionId,
+          });
+          return new Response("Not Acceptable", { status: 406 });
+        }
+        const sid =
+          req.headers.get("mcp-session-id") ?? store.sessions.create();
+        let heartbeat: ReturnType<typeof setInterval> | undefined;
+        const stream = new ReadableStream<Uint8Array>({
+          start(ctrl) {
+            sseClients.set(sid, ctrl);
+            pushLegacyEndpointEvent(ctrl, sid, url.origin);
+            ctrl.enqueue(sseChunk(`id: ${crypto.randomUUID()}\ndata: \n\n`));
+            heartbeat = setInterval(() => {
+              try {
+                ctrl.enqueue(sseChunk(`: keep-alive ${Date.now()}\n\n`));
+              } catch {
+                if (heartbeat) {
+                  clearInterval(heartbeat);
+                }
+              }
+            }, 5000);
+            debugLog("sse_open", { sessionId: sid });
+          },
+          cancel() {
+            if (heartbeat) {
+              clearInterval(heartbeat);
+            }
+            sseClients.delete(sid);
+            debugLog("sse_closed", { sessionId: sid });
+          },
+        });
+        return new Response(stream, {
+          headers: {
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            Connection: "keep-alive",
+            "Mcp-Session-Id": sid,
+            "Access-Control-Allow-Origin": origin ?? "*",
+          },
+        });
+      }
+
+      // POST — JSON-RPC
+      if (req.method === "POST") {
         let body: JsonRpcRequest;
         try {
           body = (await req.json()) as JsonRpcRequest;
         } catch {
+          debugLog("parse_error", { url: req.url });
           return Response.json(
             {
-              error: { code: -32_700, message: "Parse error" },
-              id: null,
               jsonrpc: "2.0",
+              id: null,
+              error: { code: -32_700, message: "Parse error" },
             },
-            { headers: corsHeaders, status: 400 }
+            { status: 400 }
           );
         }
-        // AFTER — allows Streamable HTTP clients that POST without a session
-        const incomingSessionId = req.headers.get("mcp-session-id") ?? "";
-        let sessionId: string;
-        if (incomingSessionId) {
-          if (!sessions.touch(incomingSessionId)) {
-            return Response.json(
-              {
-                error: {
-                  code: -32_600,
-                  message: "Unknown or expired session.",
-                },
-                id: body?.id ?? null,
-                jsonrpc: "2.0",
-              },
-              { headers: corsHeaders, status: 400 }
-            );
-          }
-          sessionId = incomingSessionId;
-        } else {
-          sessionId = sessions.create();
+
+        if (body.id === undefined || body.id === null || !body.method) {
+          debugLog("ignored_message", { body });
+          return new Response(null, { status: 202 });
         }
 
-        // handle the json rpc request
-        const result = await handleJsonRpc(
-          body,
-          tools,
-          runner,
-          {
-            headers: getRequestHeaders(req.headers),
-            ip: server.requestIP(req)?.address,
-            method: req.method,
-            raw: req,
-            sessionId,
-            transport: "http",
-            url: req.url,
-          },
-          serverInfo,
-          sessionId
+        const sid = req.headers.get("mcp-session-id");
+        let activeSession: string;
+        if (sid) {
+          if (store.sessions.touch(sid)) {
+            activeSession = sid;
+          } else {
+            activeSession = store.sessions.ensure(sid);
+            debugLog("session_adopted", {
+              method: body.method,
+              requestId: body.id,
+              sessionId: sid,
+            });
+          }
+        } else {
+          activeSession = store.sessions.create();
+          debugLog("session_created_for_post", {
+            method: body.method,
+            requestId: body.id,
+            sessionId: activeSession,
+          });
+        }
+
+        if (body.method !== "initialize" && !sid) {
+          debugLog("legacy_post_without_session", {
+            method: body.method,
+            requestId: body.id,
+            sessionId: activeSession,
+          });
+        }
+
+        const protocolVersion = negotiateVersion(
+          body.method === "initialize"
+            ? ((body.params as { protocolVersion?: string } | undefined)
+                ?.protocolVersion ??
+                ver ??
+                undefined)
+            : (ver ?? undefined)
         );
 
-        return Response.json(result, {
+        debugLog("rpc_request", {
+          requestId: body.id,
+          method: body.method,
+          sessionId: activeSession,
+          protocolVersion,
+        });
+
+        if (body.method === "initialize") {
+          debugLog("initialize", {
+            requestId: body.id,
+            headerVersion: ver,
+            requestedVersion: (
+              body.params as { protocolVersion?: string } | undefined
+            )?.protocolVersion,
+            negotiatedVersion: protocolVersion,
+            sessionId: activeSession,
+          });
+        }
+
+        // Wire progress callback
+        const progressToken = (body.params as any)?._meta?.progressToken as
+          | string
+          | number
+          | undefined;
+        const progressCallback =
+          progressToken === undefined
+            ? undefined
+            : (p: { progress: number; total?: number; message?: string }) => {
+                pushSse(activeSession, {
+                  jsonrpc: "2.0",
+                  method: "notifications/progress",
+                  params: { progressToken, ...p },
+                });
+              };
+
+        const requestMeta: RequestMeta = {
+          headers: Object.fromEntries(req.headers.entries()),
+          method: req.method,
+          progressCallback,
+          raw: req,
+          sessionId: activeSession,
+          transport: "http",
+          url: req.url,
+          abortSignal: (req as any).signal,
+        };
+
+        const response = await handleJsonRpc(
+          body,
+          tools,
+          resources,
+          prompts,
+          runTool,
+          readResource,
+          getPrompt,
+          subscribeRes,
+          unsubscribeRes,
+          requestMeta,
+          serverInfo,
+          caps,
+          store,
+          activeSession,
+          protocolVersion
+        );
+
+        debugLog("rpc_response", {
+          requestId: body.id,
+          method: body.method,
+          sessionId: activeSession,
+          protocolVersion,
+          hasError: "error" in response,
+        });
+
+        return Response.json(response, {
           headers: {
-            ...corsHeaders,
-            "Mcp-Session-Id": sessionId,
+            "Mcp-Session-Id": activeSession,
+            "Mcp-Protocol-Version": protocolVersion,
+            "Access-Control-Allow-Origin": origin ?? "*",
           },
         });
       }
 
-      // ── Session teardown (DELETE /mcp) ──
-      if (req.method === "DELETE" && url.pathname === mcpPath) {
-        const sessionId = req.headers.get("mcp-session-id") ?? "";
-        const ctrl = sseClients.get(sessionId);
-        if (ctrl) {
-          try {
-            ctrl.close();
-          } catch {}
-          sseClients.delete(sessionId);
-        }
-        sessions.delete(sessionId);
-        return Response.json(
-          { ok: true, sessionId: sessionId || null, terminated: true },
-          { headers: corsHeaders }
-        );
-      }
-
-      return new Response("Not Found", { headers: corsHeaders, status: 404 });
-    },
-
-    error(err) {
-      console.error("[redop] server error:", err);
-      return new Response("Internal Server Error", { status: 500 });
+      debugLog("method_not_allowed", {
+        method: req.method,
+        path: url.pathname,
+      });
+      return new Response("Method Not Allowed", { status: 405 });
     },
   });
 
@@ -480,16 +1063,12 @@ export function startHttpTransport(
   opts.onListen?.({ hostname, port, url });
 
   return {
-    broadcast(sessionId: string, event: string, data: unknown) {
-      const ctrl = sseClients.get(sessionId);
-      if (ctrl) {
-        const msg = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
-        ctrl.enqueue(new TextEncoder().encode(msg));
-      }
-    },
     stop() {
-      sessions.stop();
+      store.stop();
       server.stop();
+    },
+    broadcast(sid: string, data: unknown) {
+      pushSse(sid, data);
     },
   };
 }

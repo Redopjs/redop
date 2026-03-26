@@ -1,4 +1,3 @@
-// oxlint-disable require-await
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {

@@ -1,0 +1,37 @@
+---
+title: Middleware vs Hooks vs Plugins
+description: Choose the right composition primitive in Redop instead of forcing everything into handlers.
+---
+
+Redop gives you four main ways to shape behavior around tools.
+
+## Use middleware when
+
+- you need to block or allow execution
+- you need to wrap `next()`
+- you want request-aware control flow such as auth, rate limiting, or caching
+
+## Use hooks when
+
+- you want observability
+- you want lightweight pre- or post-processing
+- you do not need to control execution flow
+
+## Use plugins when
+
+- you want to package reusable behavior
+- you want to ship a group of tools plus middleware or hooks
+- you want one installable unit that multiple servers can reuse
+
+## Build custom composition when
+
+- built-in plugins get you close, but not all the way
+- you want reusable middleware with your own defaults
+- you want to publish a plugin other Redop servers can consume
+
+See [Build a plugin or middleware](/guides/build-plugin-or-middleware) for step-by-step examples.
+
+## Use groups when
+
+- you want a shared prefix like `notes_list`
+- you want localized middleware or hooks inside one namespace

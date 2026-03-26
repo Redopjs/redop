@@ -1,0 +1,42 @@
+---
+title: Verify with Local Clients
+description: Check that your Redop server is reachable from Inspector, Cursor, or other local MCP clients.
+---
+
+Once your server starts, verify one transport end to end before you add more features.
+
+## For HTTP servers
+
+Point your client at:
+
+```txt
+http://localhost:3000/mcp
+```
+
+You should see an initialize request followed by capability or tool discovery requests such as `tools/list`.
+
+## For stdio servers
+
+Point your client at the command that starts the server:
+
+```sh
+bun run src/index.ts
+```
+
+## Good first checks
+
+- confirm the transport matches your client setup
+- confirm the path is `/mcp` for HTTP
+- confirm the process starts cleanly before the client connects
+- confirm you can call one small tool like `ping`
+
+## If you get stuck
+
+- use `listen({ debug: true })` for HTTP transport logs
+- keep the first server minimal until the client can connect
+- avoid debugging auth, schemas, and middleware before transport works
+
+## Next
+
+- [Build a minimal HTTP server](/tutorials/build-http-server)
+- [Debug HTTP connections and sessions](/guides/debug-http)

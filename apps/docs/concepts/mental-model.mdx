@@ -1,0 +1,29 @@
+---
+title: Mental Model
+description: Understand the core Redop building blocks before you dive into middleware, resources, or transports.
+---
+
+Think of a Redop server as a small runtime around MCP primitives.
+
+## The building blocks
+
+- `Redop` is the server
+- `tool(...)` handles actions
+- `resource(...)` exposes readable data
+- `prompt(...)` exposes reusable prompt material
+- `ctx` is mutable per-request state
+- `request` is transport metadata
+
+## The shape of one request
+
+1. a client invokes a tool
+2. Redop builds request context
+3. hooks and middleware run
+4. the handler returns a serializable result
+5. the transport sends that result back to the client
+
+## What Redop is opinionated about
+
+- Bun-first runtime
+- one fluent API for HTTP and stdio
+- schemas and TypeScript inference living close to the tool definition

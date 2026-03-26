@@ -1,0 +1,41 @@
+---
+title: Use Built-In Plugins
+description: Start with Redop's built-in logger and auth plugins before building your own.
+---
+
+Redop ships with a small set of built-in plugins so you can add common behavior quickly.
+
+## Current built-in plugin surface
+
+```ts
+import { apiKey, logger, Redop } from "@useagents/redop";
+
+new Redop({ name: "plugin-demo" })
+  .use(logger({ level: "info" }))
+  .use(apiKey({ key: process.env.API_SECRET }));
+```
+
+## Authentication lives under auth
+
+Use the auth pages for:
+
+- [API key authentication](/guides/authentication/api-key)
+- [JWT authentication](/guides/authentication/jwt)
+- [OAuth authentication](/guides/authentication/oauth)
+
+## Logger has its own guide
+
+Use the logger page when you want structured lifecycle logs:
+
+- [Logger plugin](/guides/logger-plugin)
+
+## Rule of thumb
+
+Reach for a built-in plugin first when the behavior is shared across many tools. Use a custom plugin when the behavior is specific to your product.
+
+## Next
+
+- [Built-in plugins reference](/reference/built-in-plugins)
+- [Logger plugin](/guides/logger-plugin)
+- [API key authentication](/guides/authentication/api-key)
+- [Build a plugin or middleware](/guides/build-plugin-or-middleware)

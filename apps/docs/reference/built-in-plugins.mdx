@@ -1,0 +1,95 @@
+---
+title: Built-In Plugins
+description: Reference for the built-in plugins exported by @useagents/redop.
+---
+
+These are the built-in plugins exported from `@useagents/redop` today. Each one returns a `Redop` instance, so you attach it with `.use(...)`.
+
+## `logger(opts?)`
+
+- logs tool start, end, and error events
+- options:
+  - `level?: "debug" | "info" | "warn" | "error"`
+  - `write?: (entry) => void`
+- default level: `info`
+
+```ts
+import { logger, Redop } from "@useagents/redop";
+
+new Redop({ name: "logs" }).use(logger({ level: "info" }));
+```
+
+## `apiKey(opts?)`
+
+- validates an HTTP header on HTTP requests
+- options:
+  - `key?: string`
+  - `keys?: string[]`
+  - `headerName?: string`
+  - `contextKey?: string`
+  - `required?: boolean`
+  - `validateKey?: (apiKey, event) => boolean | Promise<boolean>`
+  - legacy aliases still supported: `secret`, `ctxKey`, `validate`
+- default header: `x-api-key`
+- default context key: `apiKey`
+
+```ts
+import { apiKey, Redop } from "@useagents/redop";
+
+new Redop({ name: "auth" }).use(
+  apiKey({
+    key: process.env.API_SECRET ?? "dev-secret",
+  }),
+);
+```
+
+## `jwt(opts)`
+
+- validates bearer JWTs on HTTP requests
+- supports shared-secret verification or JWKS
+- options:
+  - `secret?: string`
+  - `jwksUri?: string`
+  - `issuer?: string`
+  - `audience?: string | string[]`
+  - `requiredScopes?: string[]`
+  - `optional?: boolean`
+
+```ts
+import { jwt, Redop } from "@useagents/redop";
+
+new Redop({ name: "auth" }).use(
+  jwt({
+    secret: process.env.JWT_SECRET ?? "dev-jwt-secret",
+  }),
+);
+```
+
+## `oauth(opts)`
+
+- validates OAuth bearer tokens using issuer discovery and JWKS
+- options:
+  - `issuer: string`
+  - `audience?: string | string[]`
+  - `requiredScopes?: string[]`
+  - `optional?: boolean`
+
+```ts
+import { oauth, Redop } from "@useagents/redop";
+
+new Redop({ name: "auth" }).use(
+  oauth({
+    issuer: "https://auth.example.com",
+    audience: "my-mcp-server",
+  }),
+);
+```
+
+## See also
+
+- [API key authentication](/guides/authentication/api-key)
+- [JWT authentication](/guides/authentication/jwt)
+- [OAuth authentication](/guides/authentication/oauth)
+- [Logger plugin](/guides/logger-plugin)
+- [Build a plugin or middleware](/guides/build-plugin-or-middleware)
+- [Middleware, hooks, and plugins](/concepts/composition)

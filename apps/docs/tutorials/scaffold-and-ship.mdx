@@ -1,0 +1,46 @@
+---
+title: Scaffold and Ship a Starter App
+description: Use create-redop-app to generate a starter, run it locally, and choose a deploy path.
+---
+
+This tutorial is the fastest path from zero to a project you can run and extend.
+
+## Step 1: Generate the starter
+
+```sh
+bun create redop-app my-redop-app
+```
+
+Choose:
+
+- `http` if you want a hosted server
+- `stdio` if you want a local command-based server
+
+## Step 2: Run the app
+
+```sh
+cd my-redop-app
+bun dev
+```
+
+## Step 3: Inspect the generated files
+
+The starter gives you:
+
+- `src/index.ts`
+- `package.json`
+- `tsconfig.json`
+- `README.md`
+
+HTTP deploy presets can also add platform files such as `Dockerfile` or `fly.toml`.
+
+## Step 4: Pick a deploy path
+
+- Bun runtime for simple hosting
+- Railway for a long-running Bun service
+- Fly.io when you want Docker-based deployment
+
+## Next
+
+- [Guide: create-redop-app presets](/guides/create-redop-app-presets)
+- [Guide: deploy to production](/guides/deploy/index)

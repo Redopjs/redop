@@ -1,0 +1,28 @@
+---
+title: OAuth Authentication
+description: Validate OAuth bearer tokens with issuer discovery and JWKS support.
+---
+
+Use `oauth(...)` when you want Redop to discover the authorization server metadata for an issuer and validate bearer tokens against that issuer's JWKS.
+
+## Example
+
+```ts
+import { oauth, Redop } from "@useagents/redop";
+
+new Redop({ name: "oauth-demo" }).use(
+  oauth({
+    issuer: "https://auth.example.com",
+    audience: "my-mcp-server",
+    requiredScopes: ["tools:read"],
+  }),
+);
+```
+
+The discovery document and JWKS are cached automatically.
+
+## See also
+
+- [API key authentication](/guides/authentication/api-key)
+- [JWT authentication](/guides/authentication/jwt)
+- [Built-in plugins reference](/reference/built-in-plugins)

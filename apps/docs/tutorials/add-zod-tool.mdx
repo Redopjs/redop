@@ -1,0 +1,54 @@
+---
+title: Add Typed Input with Zod
+description: Add a Zod schema to a Redop tool so handler input is validated and inferred.
+---
+
+This tutorial assumes you already have a working Redop server.
+
+## What you will add
+
+- runtime validation for tool input
+- TypeScript inference inside the handler
+- defaults and constraints in one schema
+
+## Step 1: Install Zod
+
+```sh
+bun add zod
+```
+
+## Step 2: Add a schema
+
+```ts
+import { Redop } from "@useagents/redop";
+import { z } from "zod";
+
+new Redop({ name: "typed-server" })
+  .tool("search_posts", {
+    description: "Search posts by query",
+    input: z.object({
+      query: z.string().min(1),
+      limit: z.number().int().min(1).max(20).default(10),
+    }),
+    handler: ({ input }) => {
+      return {
+        query: input.query,
+        limit: input.limit,
+      };
+    },
+  });
+```
+
+## What changed
+
+- `input.query` is now typed as `string`
+- `input.limit` is now typed as `number`
+- Redop uses the same schema for runtime parsing and tool discovery
+
+## Milestone
+
+If your client can still connect and call the tool, you now have the core Redop flow working: transport, schema parsing, and typed handler input.
+
+## Next
+
+- [Add middleware and hooks](/tutorials/add-middleware-hooks)

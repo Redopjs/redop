@@ -1,0 +1,48 @@
+---
+title: Debug HTTP Connections and Sessions
+description: Use the built-in debug logs and the current HTTP transport behavior to troubleshoot client connections.
+---
+
+When an HTTP client cannot connect, debug the transport before you debug your tools.
+
+## Turn on transport logs
+
+```ts
+app.listen({
+  port: Number(process.env.PORT ?? 3000),
+  hostname: "0.0.0.0",
+  cors: true,
+  debug: true,
+});
+```
+
+That prints request, session, initialize, and response logs from the HTTP transport.
+
+## Check the endpoint first
+
+The MCP URL is:
+
+```txt
+http://localhost:3000/mcp
+```
+
+Do not point clients at `/mcp/health` or `/mcp/schema`. The current transport does not mount those routes by default. If you enabled `health`, use that custom path for platform checks only, not as the MCP client endpoint.
+
+## What the current transport serves
+
+- `POST /mcp` for JSON-RPC
+- `GET /mcp` for the event stream
+- `DELETE /mcp` for session termination
+- `GET /` for the development UI when dev UI is enabled
+
+## Practical compatibility notes
+
+- the transport negotiates MCP protocol versions with the client
+- it keeps a compatibility layer for local Inspector-style workflows
+- it accepts client-provided session IDs for better tooling interoperability
+
+## Common checks
+
+- make sure the client uses the `/mcp` path
+- keep one simple tool like `ping` until the handshake succeeds
+- if you are using stdio, send logs to stderr, not stdout

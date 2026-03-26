@@ -1,4 +1,10 @@
-import type { DeployTarget, GeneratedFile, ResolvedOptions } from "./types";
+import type {
+  Component,
+  DeployTarget,
+  GeneratedFile,
+  ResolvedOptions,
+  SchemaLibrary,
+} from "./types";
 
 function toPackageName(name: string) {
   return (
@@ -15,11 +21,13 @@ function toServerName(name: string) {
 }
 
 function renderPackageJson(options: ResolvedOptions) {
+  const components = selectedComponents(options);
+  const schemaDeps = schemaDependencies(options.schemaLibrary, components);
   return JSON.stringify(
     {
       dependencies: {
         "@useagents/redop": "latest",
-        zod: "latest",
+        ...schemaDeps,
       },
       devDependencies: {
         "@types/bun": "latest",
@@ -28,12 +36,8 @@ function renderPackageJson(options: ResolvedOptions) {
       name: toPackageName(options.appName),
       private: true,
       scripts: {
-        build: "bun build ./src/index.ts --outdir ./dist --target node",
-        dev: "bun run src/index.ts",
-        start:
-          options.transport === "http"
-            ? "bun run src/index.ts"
-            : "bun run src/index.ts",
+        dev: "bun run --watch src/index.ts",
+        start: "bun run src/index.ts",
         typecheck: "tsc --noEmit",
       },
       type: "module",
@@ -53,9 +57,6 @@ function renderTsconfig() {
         moduleResolution: "bundler",
         moduleDetection: "force",
         allowJs: true,
-
-        // Explicitly load @types/bun
-        types: ["bun"],
 
         strict: true,
         noUncheckedIndexedAccess: true,
@@ -83,56 +84,158 @@ function renderGitignore() {
   return ["node_modules", "dist", ".env", ".DS_Store"].join("\n") + "\n";
 }
 
-function renderIndexTs(options: ResolvedOptions) {
-  if (options.transport === "stdio") {
-    return `
-    import { Redop } from "@useagents/redop";
-import { z } from "zod";
+function selectedComponents(options: ResolvedOptions) {
+  return new Set<Component>(
+    options.components.length ? options.components : ["tools"]
+  );
+}
 
-new Redop({
-  name: "${toServerName(options.appName)}",
-  version: "0.1.0",
-}).tool("ping", {
-  description: "Health check tool",
-  input: z.object({
-    message: z.string().default("pong"),
-  }),
-  handler: ({ input }) => ({
-    ok: true,
-    message: input.message,
-    ts: Date.now(),
-  }),
-}).listen({
-  transport: "stdio",
-});
-`;
+function schemaDependencies(
+  schemaLibrary: SchemaLibrary,
+  components: Set<Component>
+) {
+  if (!components.has("tools")) {
+    return {};
   }
+
+  switch (schemaLibrary) {
+    case "valibot":
+      return { valibot: "latest" };
+    case "typebox":
+      return { "@sinclair/typebox": "latest" };
+    case "json-schema":
+      return {};
+    case "zod":
+    default:
+      return { zod: "latest" };
+  }
+}
+
+function schemaImport(
+  schemaLibrary: SchemaLibrary,
+  components: Set<Component>
+) {
+  if (!components.has("tools")) {
+    return "";
+  }
+
+  switch (schemaLibrary) {
+    case "valibot":
+      return `import * as v from "valibot";`;
+    case "typebox":
+      return `import { Type } from "@sinclair/typebox";`;
+    case "json-schema":
+      return "";
+    case "zod":
+    default:
+      return `import { z } from "zod";`;
+  }
+}
+
+function renderToolInput(schemaLibrary: SchemaLibrary) {
+  switch (schemaLibrary) {
+    case "valibot":
+      return `v.object({
+      message: v.optional(v.string(), "pong"),
+    })`;
+    case "typebox":
+      return `Type.Object({
+      message: Type.Optional(Type.String({ default: "pong" })),
+    })`;
+    case "json-schema":
+      return `{
+      type: "object",
+      properties: {
+        message: { type: "string", default: "pong" },
+      },
+      additionalProperties: false,
+    }`;
+    case "zod":
+    default:
+      return `z.object({
+      message: z.string().default("pong"),
+    })`;
+  }
+}
+
+function renderComponentChain(options: ResolvedOptions) {
+  const components = selectedComponents(options);
+  const blocks: string[] = [];
+
+  if (components.has("tools")) {
+    blocks.push(`  .tool("ping", {
+    description: "Health check tool",
+    input: ${renderToolInput(options.schemaLibrary)},
+    handler: ({ input }) => ({
+      ok: true,
+      message: input.message,
+      ts: Date.now(),
+    }),
+  })`);
+  }
+
+  if (components.has("resources")) {
+    blocks.push(`  .resource("app://status", {
+    name: "App status",
+    mimeType: "application/json",
+    handler: async () => ({
+      type: "text",
+      text: JSON.stringify({
+        name: "${toServerName(options.appName)}",
+        status: "ok",
+        ts: Date.now(),
+      }),
+    }),
+  })`);
+  }
+
+  if (components.has("prompts")) {
+    blocks.push(`  .prompt("summarise_status", {
+    description: "Summarise the current application status",
+    arguments: [{ name: "focus", description: "What to focus on" }],
+    handler: ({ arguments: args }) => [
+      {
+        role: "user",
+        content: {
+          type: "text",
+          text: \`Summarise the current app status with a focus on \${args?.focus ?? "overall health"}.\`,
+        },
+      },
+    ],
+  })`);
+  }
+
+  return blocks.join("\n");
+}
+
+function renderIndexTs(options: ResolvedOptions) {
+  const components = selectedComponents(options);
+  const chain = renderComponentChain(options);
+
+  const listenBlock =
+    options.transport === "stdio"
+      ? `  .listen({
+    transport: "stdio",
+  });`
+      : `  .listen({
+    port: Number(process.env.PORT ?? 3000),
+    hostname: "0.0.0.0",
+    cors: true,
+    onListen: ({ url }) => {
+      console.log(\`Redop is running at \${url}\`);
+    },
+  });`;
 
   return `
 import { Redop } from "@useagents/redop";
-import { z } from "zod";
+${schemaImport(options.schemaLibrary, components)}
 
 new Redop({
   name: "${toServerName(options.appName)}",
   version: "0.1.0",
-}).tool("ping", {
-  description: "Health check tool",
-  input: z.object({
-    message: z.string().default("pong"),
-  }),
-  handler: ({ input }) => ({
-    ok: true,
-    message: input.message,
-    ts: Date.now(),
-  }),
-}).listen({
-  port: Number(process.env.PORT ?? 3000),
-  hostname: "0.0.0.0",
-  cors: true,
-  onListen: ({ url }) => {
-    console.log(\`Redop is running at \${url}\`);
-  },
-});
+})
+${chain}
+${listenBlock}
 `;
 }
 
@@ -148,7 +251,7 @@ COPY . .
 
 EXPOSE 3000
 
-CMD ["bun", "run", "src/index.ts"]
+CMD ["bun", "start"]
 `;
 }
 
@@ -162,13 +265,6 @@ function renderFlyToml(options: ResolvedOptions) {
   auto_start_machines = true
   auto_stop_machines = "stop"
   min_machines_running = 1
-
-  [[http_service.checks]]
-    interval = "15s"
-    timeout = "5s"
-    grace_period = "10s"
-    method = "GET"
-    path = "/mcp/health"
 `;
 }
 
@@ -206,33 +302,55 @@ function deploySection(deploy: DeployTarget) {
     case "none": {
       return `## Deploy on Bun runtime
 
-Run this app as a Bun HTTP or stdio service. For HTTP, bind to \`0.0.0.0\` and read \`PORT\` from the environment.`;
+Run this app as a Bun HTTP or stdio service. For HTTP, bind to \`0.0.0.0\`, read \`PORT\` from the environment, and expose the MCP endpoint at \`/mcp\`.
+
+Deployment guide:
+
+- https://redop.useagents.site/docs/guides/deploy/index`;
     }
     case "railway": {
       return `## Deploy on Railway
 
-Use Railway as a long-running Bun service. Set your start command to \`bun run src/index.ts\` and point health checks at \`/mcp/health\` for HTTP apps.`;
+Use Railway as a long-running Bun service. Set your start command to \`bun start\`. If your service needs a separate health endpoint, enable one explicitly with \`health: true\` or \`health: { path: "/health" }\`.
+
+Step-by-step guide:
+
+- https://redop.useagents.site/docs/guides/deploy/railway`;
     }
     case "fly-io": {
       return `## Deploy on Fly.io
 
-This starter includes a Dockerfile and \`fly.toml\`. Deploy with \`fly launch\` and \`fly deploy\`.`;
+This starter includes a Dockerfile and \`fly.toml\`. Deploy with \`fly launch\` and \`fly deploy\`.
+
+Step-by-step guides:
+
+- https://redop.useagents.site/docs/guides/deploy/fly-io
+- https://redop.useagents.site/docs/guides/deploy/docker`;
     }
     case "vercel": {
       return `## Deploy on Vercel
 
-This preset adds \`vercel.json\`, but Vercel uses a function model. Treat this as a starting point, not a drop-in match for the default Redop server shape.`;
+This preset adds \`vercel.json\`, but Vercel uses a function model. Treat this as a starting point, not a drop-in match for the default Redop server shape.
+
+Read this first:
+
+- https://redop.useagents.site/docs/guides/deploy/vercel`;
     }
     default: {
       return `## Deploy
 
-No deploy files were generated for this starter.`;
+No deploy files were generated for this starter.
+
+Deployment guide:
+
+- https://redop.useagents.site/docs/guides/deploy/index`;
     }
   }
 }
 
 function renderReadme(options: ResolvedOptions) {
   const warnings = renderWarnings(options);
+  const components = options.components.length ? options.components : ["tools"];
   const warningBlock =
     warnings.length === 0
       ? ""
@@ -248,33 +366,48 @@ ${warnings.map((warning) => `- ${warning}`).join("\n")}
 
 \`\`\`sh
 bun install
-bun run src/index.ts
+bun dev
 \`\`\`
 
 Your server will listen on \`PORT\` or fall back to \`3000\`.
+The MCP endpoint is \`/mcp\`.
 
-Check health:
+Quick initialize check:
 
 \`\`\`sh
-curl http://localhost:3000/mcp/health
+curl -X POST http://localhost:3000/mcp \\
+  -H 'Content-Type: application/json' \\
+  --data '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"manual-check","version":"1.0.0"}}}'
 \`\`\``
       : `## Run
 
 \`\`\`sh
 bun install
-bun run src/index.ts
+bun dev
 \`\`\`
 
 This starter uses stdio transport for local MCP host integrations.`;
 
+  const componentBlock = `## Included in this starter
+
+${components.includes("tools") ? "- A sample tool (`ping`)\n" : ""}${components.includes("resources") ? "- A sample resource (`app://status`)\n" : ""}${components.includes("prompts") ? "- A sample prompt (`summarise_status`)\n" : ""}`;
+
   return `# ${options.appName}
+
+[![Deploy to Railway](https://img.shields.io/badge/Deploy-Railway-f03603)](https://redop.useagents.site/guides/deploy/railway)
+[![Deploy to Fly.io](https://img.shields.io/badge/Deploy-Fly.io-f03603)](https://redop.useagents.site/guides/deploy/fly-io)
+[![Docs: Deploy to Production](https://img.shields.io/badge/Docs-Deploy%20to%20Production-111827)](https://redop.useagents.site/guides/deploy/index)
 
 A Redop starter app generated by \`create-redop-app\`.
 
 - transport: \`${options.transport}\`
 - deploy target: \`${options.deploy}\`
+- schema library: \`${options.schemaLibrary}\`
+- components: \`${components.join(", ")}\`
 
 ${warningBlock}${transportBlock}
+
+${componentBlock}
 
 ${deploySection(options.deploy)}
 `;

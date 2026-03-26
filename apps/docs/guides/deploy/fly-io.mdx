@@ -1,0 +1,122 @@
+---
+title: Deploy to Fly.io
+description: Deploy a Docker-based Redop HTTP server to Fly.io and verify the MCP endpoint.
+---
+
+Use Fly.io when you want an always-on Docker-based deployment for Redop.
+
+## Before you start
+
+This guide assumes:
+
+- your server uses the HTTP transport
+- the app binds `0.0.0.0`
+- the app reads `PORT`
+
+If you scaffolded with `create-redop-app --transport http --deploy fly-io`, the starter already generated:
+
+- `Dockerfile`
+- `fly.toml`
+
+## Fly.io fit
+
+| Item | Value |
+| ---- | ----- |
+| Recommended transport | `http` |
+| App shape | long-running Bun service in Docker |
+| Required env vars | `PORT` is provided by Fly’s runtime and proxy setup |
+| Deploy command | `fly deploy` |
+| Generated files | `Dockerfile`, `fly.toml` |
+| Recommended for | always-on deployments and Docker-based workflows |
+
+## Generated `src/index.ts` shape
+
+```ts
+import { Redop } from "@useagents/redop";
+
+new Redop({
+  name: "fly-redop",
+  version: "0.1.0",
+})
+  .tool("ping", {
+    handler: () => ({ ok: true }),
+  })
+  .listen({
+    port: Number(process.env.PORT ?? 3000),
+    hostname: "0.0.0.0",
+  });
+```
+
+## Generated `Dockerfile`
+
+```dockerfile
+FROM oven/bun:1
+
+WORKDIR /app
+
+COPY package.json bun.lock* ./
+RUN bun install
+
+COPY . .
+
+EXPOSE 3000
+
+CMD ["bun", "run", "src/index.ts"]
+```
+
+## Generated `fly.toml`
+
+```toml
+app = "your-app-fly"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_start_machines = true
+  auto_stop_machines = "stop"
+  min_machines_running = 1
+```
+
+## Deploy steps
+
+1. Install the Fly CLI and log in.
+2. From your project directory, run:
+
+```sh
+fly launch
+```
+
+3. Review `fly.toml` and make sure the app’s internal port matches your Redop listener.
+4. Deploy:
+
+```sh
+fly deploy
+```
+
+## Port and machine expectations
+
+- Keep the app listening on `PORT` with a default fallback like `3000`.
+- Keep the listener on `0.0.0.0`.
+- Fly proxies traffic to your internal app port from `fly.toml`.
+- If you need a separate health route, enable `health: true` or `health: { path: "/health" }`.
+
+## Verify the deployment
+
+Replace the hostname with your Fly app hostname:
+
+```sh
+curl -X POST https://your-app.fly.dev/mcp \
+  -H 'Content-Type: application/json' \
+  --data '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"fly-check","version":"1.0.0"}}}'
+```
+
+What success looks like:
+
+- the app is reachable over HTTPS
+- `/mcp` returns a valid JSON-RPC initialize result
+- your Fly machine stays up for MCP requests instead of behaving like a short-lived function
+
+## Next
+
+- [Deploy with Docker](/guides/deploy/docker)
+- [Deploy to Production overview](/guides/deploy/index)

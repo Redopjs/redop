@@ -1,0 +1,38 @@
+---
+title: Logger Plugin
+description: Add structured lifecycle logs with the built-in logger plugin.
+---
+
+Use `logger(...)` when you want request-aware logs around tool execution without wiring your own hooks every time.
+
+## Basic example
+
+```ts
+import { logger, Redop } from "@useagents/redop";
+
+new Redop({ name: "logs" }).use(logger({ level: "info" }));
+```
+
+## Send logs somewhere else
+
+```ts
+new Redop({ name: "logs" }).use(
+  logger({
+    write: (entry) => {
+      console.log("[my-app]", JSON.stringify(entry));
+    },
+  }),
+);
+```
+
+## Good use cases
+
+- local debugging
+- structured request logs
+- pairing with log drains or observability tooling
+- lightweight visibility before building custom hooks
+
+## See also
+
+- [Built-in plugins reference](/reference/built-in-plugins)
+- [Build a plugin or middleware](/guides/build-plugin-or-middleware)

@@ -17,8 +17,7 @@
     "start:web": "turbo run start --filter=@redop-ai/web"
   },
   "devDependencies": {
-    "oxfmt": "^0.41.0",
-    "oxlint": "^1.56.0",
+    "@biomejs/biome": "2.4.7",
     "turbo": "^2.8.19",
     "typescript": "5.9.2",
     "ultracite": "7.3.2"

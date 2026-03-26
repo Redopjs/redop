@@ -1,0 +1,45 @@
+---
+title: Use create-redop-app Flags and Presets
+description: Choose the right transport and deploy presets when you generate a Redop starter app.
+---
+
+`create-redop-app` is small on purpose. It gives you one starter shape with a few decisions up front.
+
+## Useful flags
+
+```sh
+bunx create-redop-app my-redop-app --transport http --deploy railway
+```
+
+## Transport choices
+
+- `http` for hosted services
+- `stdio` for local MCP command integrations
+
+## Deploy presets
+
+- `none` for manual setup
+- `railway` for hosted Bun services
+- `fly-io` for Docker-based deployment
+- `vercel` as a starting point only
+
+## Generated files by preset
+
+| Preset | Extra files |
+| ------ | ----------- |
+| `none` | none |
+| `railway` | none |
+| `fly-io` | `Dockerfile`, `fly.toml` |
+| `vercel` | `vercel.json` |
+
+## Good default
+
+If you are unsure, start with `--transport http --deploy railway` for hosted work or `--transport stdio` for local client integrations.
+
+## Deployment guides
+
+- [Deploy to Production](/guides/deploy/index)
+- [Deploy to Railway](/guides/deploy/railway)
+- [Deploy to Fly.io](/guides/deploy/fly-io)
+- [Deploy with Docker](/guides/deploy/docker)
+- [Deploy to Vercel](/guides/deploy/vercel)

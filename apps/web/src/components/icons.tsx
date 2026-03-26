@@ -3,9 +3,9 @@ import type { SVGProps } from "react";
 export const Icons = {
   Logo: (props: SVGProps) => (
     <svg
-      width="808"
-      viewBox="0 0 808 208"
       fill="none"
+      viewBox="0 0 808 208"
+      width="808"
       xmlns="http://www.w3.org/2000/svg"
       {...props}
     >

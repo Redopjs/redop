@@ -1,0 +1,42 @@
+---
+title: Register Resources
+description: Add static and template resources to a Redop server with resource.
+---
+
+Use resources when clients should read data instead of calling a tool.
+
+## Static resource
+
+```ts
+app.resource("config://server", {
+  name: "Server config",
+  mimeType: "application/json",
+  handler: async () => ({
+    type: "text",
+    text: JSON.stringify({ region: "eu-west-1" }),
+  }),
+});
+```
+
+## Template resource
+
+```ts
+app.resource("users://{id}/profile", {
+  name: "User profile",
+  mimeType: "application/json",
+  handler: async ({ params }) => ({
+    type: "text",
+    text: JSON.stringify({ id: params?.id }),
+  }),
+});
+```
+
+## What to return
+
+- `{ type: "text", text, mimeType? }` for UTF-8 content
+- `{ type: "blob", blob, mimeType? }` for base64-encoded binary content
+
+## Next
+
+- [Notify resource subscribers](/guides/notify-resource-changes)
+- [Concept: resources and prompts](/concepts/resources-prompts)

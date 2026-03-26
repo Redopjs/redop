@@ -1,0 +1,57 @@
+---
+title: Request, Context, and Handler Events
+description: Reference for ToolRequest, Context, and the event objects Redop passes to handlers, middleware, and hooks.
+---
+
+## `request`
+
+`request` is transport metadata for the current invocation.
+
+Useful fields:
+
+- `headers`
+- `transport`
+- `sessionId?`
+- `method?`
+- `url?`
+- `raw?`
+- `abortSignal?`
+- `progressCallback?`
+
+These fields are optional when the active transport cannot provide them.
+
+## `ctx`
+
+`ctx` is mutable per-request state shared across derive functions, hooks, middleware, and the handler.
+
+Built-in fields:
+
+- `headers`
+- `rawParams`
+- `requestId`
+- `sessionId?`
+- `tool`
+- `transport`
+
+## Handler event
+
+Handlers receive:
+
+- `input`
+- `ctx`
+- `request`
+- `tool`
+- `emit.progress(...)`
+- `signal`
+
+## Middleware event
+
+Middleware receives the same event plus:
+
+- `next()`
+
+## Hook events
+
+- before hooks receive `ctx`, `input`, `request`, `tool`
+- after hooks also receive `result`
+- error hooks receive `error`

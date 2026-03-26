@@ -1,0 +1,95 @@
+---
+title: Deploy to Railway
+description: Deploy a long-running Redop HTTP server to Railway with Bun and verify the MCP endpoint.
+---
+
+Use Railway when you want the simplest hosted deployment for Redop’s built-in HTTP transport.
+
+## Before you start
+
+This guide assumes:
+
+- your server uses `listen({ transport: "http" })` or the default HTTP path
+- the app binds `hostname: "0.0.0.0"`
+- the app reads `PORT` from `process.env.PORT`
+
+If you used `create-redop-app --transport http --deploy railway`, you already have the right starting shape.
+
+## Railway fit
+
+| Item | Value |
+| ---- | ----- |
+| Recommended transport | `http` |
+| Start command | `bun run src/index.ts` |
+| Required env vars | `PORT` is provided by Railway |
+| Extra generated files | none |
+| Recommended for | first hosted Redop deployment |
+
+## Example `src/index.ts`
+
+```ts
+import { Redop } from "@useagents/redop";
+
+new Redop({
+  name: "railway-redop",
+  version: "0.1.0",
+})
+  .tool("ping", {
+    handler: () => ({ ok: true }),
+  })
+  .listen({
+    port: Number(process.env.PORT ?? 3000),
+    hostname: "0.0.0.0",
+  });
+```
+
+## Optional Railway health endpoint
+
+If you want Railway to probe a separate route, opt in explicitly:
+
+```ts
+.listen({
+  port: Number(process.env.PORT ?? 3000),
+  hostname: "0.0.0.0",
+  health: { path: "/health" },
+});
+```
+
+## Deploy steps
+
+1. Push your Redop project to GitHub.
+2. Create a new Railway project from that repository.
+3. Set the start command to:
+
+```sh
+bun run src/index.ts
+```
+
+4. Leave `PORT` to Railway. Do not hardcode a different production port.
+5. Deploy the service.
+
+## Health checks
+
+Redop does not mount `/mcp/health` by default. If you want a custom Railway health check endpoint, enable one with `health: true` or `health: { path: "/health" }`. Otherwise, verify the MCP endpoint directly.
+
+## Verify the deployment
+
+Replace the hostname with your Railway service URL:
+
+```sh
+curl -X POST https://your-app.up.railway.app/mcp \
+  -H 'Content-Type: application/json' \
+  --data '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"railway-check","version":"1.0.0"}}}'
+```
+
+What success looks like:
+
+- HTTP `200`
+- a JSON-RPC response body
+- `result.serverInfo.name` matches your Redop server
+
+## Next
+
+- [Deploy to Production overview](/guides/deploy/index)
+- [Deploy to Fly.io](/guides/deploy/fly-io)
+- [Connect over HTTP](/getting-started/connect-http)

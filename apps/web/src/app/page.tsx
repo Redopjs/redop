@@ -133,8 +133,10 @@ export default function Home() {
                   <code>
                     <span className="text-redop-primary">import</span> {"{"}{" "}
                     Redop {"}"} <span className="text-redop-primary">from</span>{" "}
-                    <span className="text-redop-deep">&apos;redop&apos;</span>;
-                    {"\n"}
+                    <span className="text-redop-deep">
+                      &apos;@useagents/redop&apos;
+                    </span>
+                    ;{"\n"}
                     <span className="text-redop-primary">import</span> {"{"} z{" "}
                     {"}"} <span className="text-redop-primary">from</span>{" "}
                     <span className="text-redop-deep">&apos;zod&apos;</span>;
@@ -178,9 +180,7 @@ export default function Home() {
                     {"}"},{"\n"}
                     {"  "}
                     {"}"},{"\n"}
-                    {"  "}.listen({"{"} transport:{" "}
-                    <span className="text-redop-deep">&apos;stdio&apos;</span>{" "}
-                    {"}"});
+                    {"  "}.listen(3000);
                   </code>
                 </pre>
               </div>
@@ -191,7 +191,7 @@ export default function Home() {
         {/* Proof Strip */}
         <motion.section
           animate={{ opacity: 1 }}
-          className="flex flex-wrap items-center gap-x-8 gap-y-4  py-8 font-mono text-muted-foreground border-t text-sm uppercase tracking-wider"
+          className="flex flex-wrap items-center gap-x-8 gap-y-4 border-t py-8 font-mono text-muted-foreground text-sm uppercase tracking-wider"
           initial={{ opacity: 0 }}
           transition={{ delay: 0.5, duration: 0.7 }}
         >
@@ -253,7 +253,7 @@ export default function Home() {
               },
             ].map((feature, i) => (
               <div
-                className="rounded-xl border border-redop-border bg-redop-panel p-6 "
+                className="rounded-xl border border-redop-border bg-redop-panel p-6"
                 key={i}
               >
                 <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-redop-soft">
@@ -314,7 +314,7 @@ export default function Home() {
       <footer className="z-10 mt-auto w-full border-redop-border border-t bg-redop-panel py-8">
         <div className="mx-auto flex max-w-390 flex-col items-center justify-between gap-6 px-6 md:flex-row">
           <Icons.Logo className="w-20" />
-          <div className="font-mono text-muted-foreground text-lg uppercase ">
+          <div className="font-mono text-lg text-muted-foreground uppercase">
             © 2026 UseAgents. MIT Licensed.
           </div>
         </div>

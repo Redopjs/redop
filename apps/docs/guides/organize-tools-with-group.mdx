@@ -1,0 +1,37 @@
+---
+title: Organize Tools with group
+description: Use group to namespace tools, resources, and prompts under a shared prefix.
+---
+
+Use `group(...)` when a section of your server belongs together.
+
+## Example
+
+```ts
+import { Redop } from "@useagents/redop";
+
+new Redop({ name: "grouped-server" }).group("notes", (notes) => {
+  notes
+    .tool("list", {
+      handler: () => ({ notes: [] }),
+    })
+    .tool("get", {
+      handler: ({ input }) => ({ id: input.id }),
+      input: {
+        type: "object",
+        properties: {
+          id: { type: "string" },
+        },
+        required: ["id"],
+      },
+    });
+});
+```
+
+Those tools are registered as `notes_list` and `notes_get`.
+
+## What group changes
+
+- tools, resources, and prompts get a shared prefix
+- hooks and middleware added inside the callback stay scoped to that group
+- the parent server keeps its own global registrations

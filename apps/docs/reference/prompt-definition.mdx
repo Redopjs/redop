@@ -1,0 +1,44 @@
+---
+title: Prompt Definition
+description: Reference for prompt definitions, prompt arguments, and prompt message content in Redop.
+---
+
+## Shape
+
+```ts
+app.prompt("summarise", {
+  description: "Summarise a block of text",
+  arguments: [
+    { name: "text", required: true },
+    { name: "length" },
+  ],
+  handler: ({ arguments: args, request }) => ({
+    description: "Summarise user-provided text",
+    messages: [
+      {
+        role: "user",
+        content: {
+          type: "text",
+          text: `Summarise this for ${request.transport}: ${args?.text ?? ""}`,
+        },
+      },
+    ],
+  }),
+});
+```
+
+## Fields
+
+| Field | Required | Purpose |
+| ----- | -------- | ------- |
+| `description` | No | Short prompt description. |
+| `arguments` | No | Named arguments exposed to the client. |
+| `handler` | Yes | Returns prompt messages or `{ description?, messages }`. |
+
+## Prompt message content
+
+Prompt messages can contain:
+
+- text
+- image data
+- embedded resource payloads

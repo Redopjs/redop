@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { RequestMeta } from "../src/index";
-import { apiKey, bearer, middleware, rateLimit, Redop } from "../src/index";
+import { apiKey, bearer, middleware, Redop, rateLimit } from "../src/index";
 
 async function runTool(
   app: Redop,

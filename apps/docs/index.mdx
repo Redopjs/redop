@@ -1,40 +1,39 @@
 ---
 title: Introduction
-description: Bun-native TypeScript framework for building typed MCP servers with tools, middleware, hooks, and plugins.
+description: Build Bun-first MCP servers with typed tools, middleware, hooks, plugins, resources, prompts, and HTTP or stdio transports.
 ---
 
-Redop is a Bun-native TypeScript framework for building MCP servers with typed tools, schema inference, middleware, lifecycle hooks, and reusable plugins.
+Redop is a Bun-first TypeScript framework for building MCP servers without hand-writing the transport, schema, and lifecycle plumbing yourself.
 
 Use it when you want to:
 
-- define MCP tools with strong TypeScript inference
-- validate and coerce input with Zod v4 or plain JSON Schema
-- add auth, analytics, rate limiting, caching, and logging without boilerplate
-- ship over streamable HTTP or stdio without rebuilding MCP plumbing
+- define tools with strong TypeScript inference
+- validate input with Zod, Standard Schema, or JSON Schema
+- add middleware, hooks, and reusable plugins
+- expose resources and prompts alongside tools
+- ship over HTTP or stdio with one framework API
 
-## Why redop
+## Why Redop
 
-Most MCP servers start the same way: wire JSON-RPC, validate input, track request state, add auth, then slowly accumulate observability and plugin logic. `redop` gives you those pieces as framework primitives from the start.
+Most MCP servers start the same way: wire JSON-RPC, parse tool input, manage request state, add auth, then bolt on logging and deployment details later. Redop turns those into framework primitives.
 
-- `tool(...)` defines MCP tools with typed handler input
-- `middleware(...)` handles request flow control
-- global hooks observe every tool invocation
-- tool-local `before` / `after` hooks keep per-tool logic close to the tool
-- `definePlugin(...)` turns reusable patterns into sharable plugins
+- `tool(...)` registers typed tools
+- `derive(...)` adds reusable request context
+- `resource(...)` and `prompt(...)` expose the rest of the MCP surface
+- middleware and hooks shape execution flow
+- `definePlugin(...)` lets you package reusable server behavior
 
 ## What the API feels like
 
 ```ts
-import { Redop } from "redop";
+import { Redop } from "@useagents/redop";
 import { z } from "zod";
 
 new Redop({
-  name: "my-mcp-server",
-  title: "My MCP Server",
-  version: "1.0.0",
-  description: "Searches and retrieves docs.",
-  instructions: "Call search before fetch. Prefer narrow queries.",
-  websiteUrl: "https://example.com/docs",
+  name: "docs-server",
+  title: "Docs Server",
+  version: "0.1.0",
+  description: "Search docs and return answers.",
 })
   .tool("search", {
     description: "Search docs",
@@ -45,22 +44,23 @@ new Redop({
       return { query: input.query, results: [] };
     },
   })
-  .listen({ port: 3000 });
+  .listen(3000);
 ```
 
-## The mental model
+## What you get
 
-- `input` is parsed tool input
-- `ctx` is shared mutable per-request state
-- `request` is transport metadata like headers, IP, URL, and session id
-- middleware controls execution flow
-- global hooks are for cross-cutting observability
-- tool-local hooks are for tool-specific analytics or post-processing
+- typed handler input
+- request-aware middleware
+- global and tool-local hooks
+- built-in plugins for logging and authentication
+- HTTP and stdio transports
+- resources and prompts when your server needs more than tools
 
 ## Start here
 
 - [Installation](/getting-started/installation)
+- [Create a project with `create-redop-app`](/getting-started/create-redop-app)
 - [Your first server](/getting-started/first-server)
-- [Typed Zod tool](/getting-started/typed-zod-tool)
-- [Handler event model](/core-concepts/handler-event)
-- [Using built-in plugins](/plugins/using-plugins)
+- [Connect over HTTP](/getting-started/connect-http)
+- [Connect over stdio](/getting-started/connect-stdio)
+- [Verify with local clients](/getting-started/verify-clients)

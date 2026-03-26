@@ -1,0 +1,56 @@
+---
+title: Connect over HTTP
+description: Run a Redop server over HTTP and verify that your MCP endpoint is available at /mcp.
+---
+
+Use HTTP when your server should run as a network service.
+
+## Start the HTTP transport
+
+```ts
+import { Redop } from "@useagents/redop";
+
+new Redop({
+  name: "http-server",
+  version: "0.1.0",
+})
+  .tool("ping", {
+    handler: () => ({ pong: true }),
+  })
+  .listen(3000);
+```
+
+## What to expect
+
+- the MCP endpoint is `http://localhost:3000/mcp`
+- `POST /mcp` handles JSON-RPC requests
+- `GET /mcp` opens the event stream used for server notifications
+- `DELETE /mcp` closes the session
+
+In development, Redop also serves a debug UI at `/` unless you disable it with `devUI: false`.
+
+## Quick manual check
+
+You can verify that initialize responds:
+
+```sh
+curl -X POST http://localhost:3000/mcp \
+  -H 'Content-Type: application/json' \
+  --data '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"manual-check","version":"1.0.0"}}}'
+```
+
+## If the connection fails
+
+Turn on transport logging:
+
+```ts
+.listen({
+  port: 3000,
+  debug: true,
+})
+```
+
+## Next
+
+- [Verify with local clients](/getting-started/verify-clients)
+- [Debug HTTP connections and sessions](/guides/debug-http)

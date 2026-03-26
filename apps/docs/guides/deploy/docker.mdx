@@ -1,0 +1,167 @@
+---
+title: Deploy with Docker
+description: Run Redop in Docker with either a standard single-project Dockerfile or an advanced monorepo production image.
+---
+
+Use Docker when you want to run Redop on your own infrastructure, on a container platform, or from a monorepo build pipeline.
+
+## Choose a Docker shape
+
+| Shape | Use when | Runtime shape |
+| ----- | -------- | ------------- |
+| Single-project Dockerfile | one Redop app in one package | `bun run src/index.ts` |
+| Monorepo production image | workspace-based repo and optimized production image | compiled Bun binary in a minimal runtime image |
+
+## Docker fit
+
+| Item | Value |
+| ---- | ----- |
+| Recommended transport | `http` |
+| Required env vars | `PORT` for the container runtime |
+| Build command | `docker build -t redop-app .` |
+| Run command | `docker run --rm -p 3000:3000 -e PORT=3000 redop-app` |
+| Generated files | `create-redop-app --deploy fly-io` generates a starting `Dockerfile` |
+
+## Example `src/index.ts`
+
+Use a listener shape like this in either Docker setup:
+
+```ts
+import { Redop } from "@useagents/redop";
+
+new Redop({
+  name: "docker-redop",
+  version: "0.1.0",
+})
+  .tool("ping", {
+    handler: () => ({ ok: true }),
+  })
+  .listen({
+    port: Number(process.env.PORT ?? 3000),
+    hostname: "0.0.0.0",
+  });
+```
+
+## Single-project Dockerfile
+
+This is the simplest Docker path for a normal Redop project.
+
+```dockerfile
+FROM oven/bun:1.3.11
+
+WORKDIR /app
+
+COPY package.json bun.lock* ./
+RUN bun install
+
+COPY . .
+
+ENV NODE_ENV=production
+
+EXPOSE 3000
+
+CMD ["bun", "run", "src/index.ts"]
+```
+
+Use this when:
+
+- your Redop app lives in one project directory
+- you do not need a compiled binary
+- you want the clearest Docker setup
+
+## Monorepo production Dockerfile
+
+Use this when your Redop app lives inside a workspace and you want a slimmer runtime image.
+
+```dockerfile
+FROM oven/bun:1.3.11 AS build
+
+WORKDIR /app
+
+COPY package.json package.json
+COPY bun.lock bun.lock
+COPY apps/mcp-server/package.json ./apps/mcp-server/package.json
+COPY packages/search/package.json ./packages/search/package.json
+COPY packages/utils/package.json ./packages/utils/package.json
+COPY packages/tsconfig/package.json ./packages/tsconfig/package.json
+
+RUN bun install
+
+COPY apps/mcp-server ./apps/mcp-server
+COPY packages/search ./packages/search
+COPY packages/utils ./packages/utils
+COPY packages/tsconfig ./packages/tsconfig
+
+ENV NODE_ENV=production
+
+RUN bun build \
+  --compile \
+  --minify-whitespace \
+  --minify-syntax \
+  --target bun-linux-x64 \
+  --outfile mcp-server \
+  apps/mcp-server/src/index.ts
+
+FROM gcr.io/distroless/base
+
+WORKDIR /app
+
+COPY --from=build /app/mcp-server mcp-server
+
+ENV NODE_ENV=production
+
+EXPOSE 3000
+
+CMD ["./mcp-server"]
+```
+
+Replace the example workspace paths with the real paths from your monorepo.
+
+## Tradeoffs
+
+| Choice | Benefits | Tradeoffs |
+| ------ | -------- | --------- |
+| `bun run src/index.ts` | simpler and easier to debug | larger runtime image |
+| `bun build --compile` | smaller, cleaner runtime image | more build setup and target-specific output |
+
+## Listener expectations
+
+No matter which Docker shape you use:
+
+- bind to `0.0.0.0`
+- read `PORT`
+- expose `/mcp`
+- do not assume `/mcp/health` unless you enabled `health`
+
+## Local smoke test
+
+Build the image:
+
+```sh
+docker build -t redop-app .
+```
+
+Run it:
+
+```sh
+docker run --rm -p 3000:3000 -e PORT=3000 redop-app
+```
+
+Verify it:
+
+```sh
+curl -X POST http://localhost:3000/mcp \
+  -H 'Content-Type: application/json' \
+  --data '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"docker-check","version":"1.0.0"}}}'
+```
+
+What success looks like:
+
+- the container starts without crashing
+- the app listens on `0.0.0.0:3000` inside the container
+- `/mcp` returns a valid initialize response
+
+## Next
+
+- [Deploy to Fly.io](/guides/deploy/fly-io)
+- [Deploy to Production overview](/guides/deploy/index)

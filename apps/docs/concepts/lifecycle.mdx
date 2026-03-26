@@ -1,0 +1,29 @@
+---
+title: Lifecycle and Execution Order
+description: Understand the order Redop uses to derive context, transform input, run hooks, execute middleware, and call handlers.
+---
+
+The current Redop request flow is:
+
+```txt
+derive -> onTransform -> schema parse -> onParse ->
+onBeforeHandle -> tool.before -> middleware -> handler ->
+tool.after -> onAfterHandle
+```
+
+## What each stage is for
+
+- `derive` builds reusable context from the request
+- `onTransform` mutates raw params before schema parsing
+- schema parsing validates and coerces input
+- `onParse` can replace parsed input
+- `onBeforeHandle` observes work before middleware and handlers
+- `tool.before` is local to one tool
+- middleware controls execution flow
+- the handler does the actual work
+- `tool.after` can post-process one tool result
+- `onAfterHandle` observes successful results across the whole server
+
+## Error handling
+
+If middleware or the handler throws, `onError` hooks run. Errors thrown inside after hooks are isolated so the successful tool result can still complete.

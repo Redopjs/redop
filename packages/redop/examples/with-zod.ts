@@ -6,7 +6,7 @@
 
 import { z } from "zod";
 
-import { analytics, logger, Redop } from "../src/index";
+import { logger, Redop } from "../src/index";
 
 // ── Simulated DB ──────────────────────────────
 
@@ -29,16 +29,22 @@ const posts = [
 
 new Redop({
   name: "with-zod",
+  title: "With Zod",
+  description: "With zod description",
   version: "1.0.1",
+  icons: [
+    {
+      src: "https://media.useagents.site/useagents/icon.svg",
+      mimeType: "image/svg+xml",
+    },
+  ],
+  websiteUrl: "https://useagents.site/docs",
 })
 
   .use(logger({ level: "info" }))
-  .use(analytics({ sink: "console" }))
   // .use(
   //   apiKey({
-  //     secret: process.env.API_SECRET ?? "dev-secret",
-  //     headerName: "x-api-key",
-  //     ctxKey: "apiKey",
+  //     key: process.env.API_SECRET ?? "dev-secret",
   //   })
   // )
 
@@ -65,7 +71,7 @@ new Redop({
     }),
     // ↓ handler input is fully typed: { tag: string | undefined, limit: number }
     handler: ({ input }) => {
-      const {tag} = input;
+      const { tag } = input;
       const filtered = tag ? posts.filter((p) => p.tags.includes(tag)) : posts;
       return { posts: filtered.slice(0, input.limit), total: filtered.length };
     },
@@ -136,9 +142,8 @@ new Redop({
 
   .listen({
     cors: true,
-    hostname: "0.0.0.0",
     onListen: ({ url }) => {
-      console.log(`ins▲ redop (zod example) → ${url}`);
+      console.log(`redop (zod example) → ${url}`);
     },
     port: process.env.PORT ?? 3000,
   });

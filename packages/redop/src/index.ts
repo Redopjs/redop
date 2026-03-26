@@ -2,20 +2,17 @@
 
 // Schema adapters
 export {
+  arktypeAdapter,
   detectAdapter,
   jsonSchemaAdapter,
   standardSchemaAdapter,
+  typeboxAdapter,
+  valibotAdapter,
   zodAdapter,
 } from "./adapters/schema";
+export { jwt, oauth } from "./plugins/auth";
 // Built-in plugins
-export {
-  analytics,
-  apiKey,
-  bearer,
-  cache,
-  logger,
-  rateLimit,
-} from "./plugins/index";
+export { apiKey, logger } from "./plugins/index";
 export { definePlugin, middleware, Redop } from "./redop";
 
 // Types
@@ -25,14 +22,14 @@ export type {
   Context,
   CorsOptions,
   ErrorHook,
+  HealthOptions,
   InferSchemaOutput,
   ListenOptions,
-  MapResponseHook,
   PluginDefinition,
   PluginFactory,
   PluginMeta,
-  RequestMeta,
   RedopOptions,
+  RequestMeta,
   ResolvedTool,
   SchemaAdapter,
   StandardSchemaIssue,
@@ -40,17 +37,17 @@ export type {
   StandardSchemaResultFailure,
   StandardSchemaResultSuccess,
   StandardSchemaV1,
+  ToolAfterHook,
+  ToolAfterHookEvent,
+  ToolBeforeHook,
+  ToolBeforeHookEvent,
+  ToolDef,
   ToolHandler,
   ToolHandlerEvent,
   ToolMiddleware,
   ToolMiddlewareEvent,
   ToolNext,
   ToolRequest,
-  ToolDef,
-  ToolAfterHook,
-  ToolAfterHookEvent,
-  ToolBeforeHook,
-  ToolBeforeHookEvent,
   TransformHook,
   TransportKind,
 } from "./types";

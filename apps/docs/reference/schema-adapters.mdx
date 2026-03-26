@@ -1,40 +1,51 @@
 ---
 title: Schema Adapters
-description: Understand how redop uses Zod, Standard Schema, and JSON Schema for validation and tool schema generation.
+description: Reference for Redop schema adapters, built-in adapter paths, and the custom adapter interface.
 ---
 
-`redop` separates tool validation from tool registration through schema adapters.
+Redop uses schema adapters to do two jobs with one `input` value:
 
-## What that means in practice
-
-When you pass `input` to a tool, `redop` needs to do two things:
-
-- parse and validate the incoming tool arguments
-- produce JSON Schema for MCP tool discovery
-
-Adapters are the layer that makes those two steps work across different schema systems.
+- parse runtime tool arguments
+- generate JSON Schema for MCP discovery
 
 ## Built-in paths
 
 ### Zod v4
 
-Recommended for the best DX.
-
 - strong TypeScript inference
 - defaults and coercions flow into handler input
-- JSON Schema comes from Standard Schema support
+- best default developer experience
+- exposed as `zodAdapter`
 
 ### Standard Schema
 
-If a schema implements the Standard Schema shape, `redop` can use it through the standard adapter path.
+- works with libraries that implement the Standard Schema contract
+- Redop can infer input/output types through that shape
+- exposed as `standardSchemaAdapter`
+
+### Valibot and ArkType
+
+- both fit the Standard Schema model
+- Redop can usually auto-detect them
+- explicit exports exist when you want a named adapter in app setup
+- exposed as `valibotAdapter` and `arktypeAdapter`
+
+### TypeBox
+
+- uses the schema directly as JSON Schema
+- can validate with `@sinclair/typebox/value` when available
+- exposed as `typeboxAdapter`
 
 ### Plain JSON Schema
 
-If you pass a plain JSON Schema object, `redop` uses it directly for tool metadata and keeps the input shape working without extra libraries.
+- useful when you already have JSON Schema
+- Redop uses the schema directly for tool metadata
+- no extra adapter package is required
+- exposed as `jsonSchemaAdapter`
 
 ## Custom adapters
 
-If you use another schema library, provide a custom adapter through the constructor:
+Pass a custom adapter when your schema library is not auto-detected:
 
 ```ts
 new Redop({
@@ -44,13 +55,31 @@ new Redop({
 });
 ```
 
-The adapter must:
+The adapter interface is:
 
-- parse runtime input
-- return JSON Schema for MCP tool descriptions
+```ts
+interface SchemaAdapter<S, P> {
+  parse(schema: S, input: unknown): P | Promise<P>;
+  toJsonSchema(schema: S): Record<string, unknown>;
+}
+```
+
+## Built-in exports
+
+`@useagents/redop` exports:
+
+- `zodAdapter`
+- `standardSchemaAdapter`
+- `valibotAdapter`
+- `arktypeAdapter`
+- `typeboxAdapter`
+- `jsonSchemaAdapter`
+- `detectAdapter`
 
 ## Rule of thumb
 
-- use Zod when you can
-- use plain JSON Schema when you already have it
-- use a custom adapter when your schema system is different but stable across your app
+- use Zod if you are starting fresh
+- use Valibot or ArkType if your project already standardizes on Standard Schema libraries
+- use TypeBox if you want JSON-Schema-first definitions with optional runtime validation
+- use JSON Schema if you already have schemas
+- use a custom adapter if your app standardizes on another schema system

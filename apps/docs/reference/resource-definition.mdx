@@ -1,0 +1,39 @@
+---
+title: Resource Definition
+description: Reference for resource definitions, resource contents, and template URI behavior in Redop.
+---
+
+## Shape
+
+```ts
+app.resource("users://{id}/profile", {
+  name: "User profile",
+  description: "Read a user's profile",
+  mimeType: "application/json",
+  subscribe: true,
+  handler: async ({ uri, params, request }) => ({
+    type: "text",
+    text: JSON.stringify({ uri, id: params?.id, transport: request.transport }),
+  }),
+});
+```
+
+## Fields
+
+| Field | Required | Purpose |
+| ----- | -------- | ------- |
+| `name` | Yes | Human-readable resource name. |
+| `description` | No | Description shown to clients. |
+| `mimeType` | No | Resource MIME type. |
+| `subscribe` | No | Opt in to `resources/subscribe`. |
+| `icons` | No | Optional icons for supporting clients. |
+| `handler` | Yes | Returns `ResourceContents`. |
+
+## `ResourceContents`
+
+- `{ type: "text", text, mimeType? }`
+- `{ type: "blob", blob, mimeType? }`
+
+## Template URIs
+
+If the resource URI contains `{name}` placeholders, Redop matches the concrete URI and passes the extracted values in `params`.

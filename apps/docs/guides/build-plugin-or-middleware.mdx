@@ -1,0 +1,99 @@
+---
+title: Build a Plugin or Middleware
+description: Create your own middleware or package reusable Redop behavior as a plugin.
+---
+
+Use middleware when you need to wrap execution for a request. Use a plugin when you want to bundle middleware, hooks, tools, resources, or prompts into one reusable unit.
+
+## Build middleware first when the behavior is request-scoped
+
+Middleware is the fastest path when you want to:
+
+- block or allow execution
+- decorate `ctx`
+- time calls
+- wrap `next()`
+
+```ts
+import { middleware, Redop } from "@useagents/redop";
+
+const requestIdPrefix = middleware(async ({ ctx, next }) => {
+  (ctx as Record<string, unknown>).shortRequestId = ctx.requestId.slice(0, 8);
+  return next();
+});
+
+new Redop({ name: "middleware-demo" })
+  .middleware(requestIdPrefix)
+  .tool("hello", {
+    handler: ({ ctx }) => ({
+      requestId: ctx.requestId,
+      shortRequestId: (ctx as Record<string, unknown>).shortRequestId,
+    }),
+  });
+```
+
+## Build a plugin when you want a reusable package of behavior
+
+`definePlugin(...)` is the cleanest path when you want to share behavior across multiple servers.
+
+```ts
+import { definePlugin, Redop } from "@useagents/redop";
+
+const timingPlugin = definePlugin({
+  name: "timing",
+  version: "0.1.0",
+  description: "Measure tool duration",
+  setup() {
+    return new Redop()
+      .onBeforeHandle(({ ctx }) => {
+        (ctx as Record<string, unknown>).startedAt = performance.now();
+      })
+      .onAfterHandle(({ ctx, tool }) => {
+        const startedAt = (ctx as Record<string, unknown>).startedAt as number | undefined;
+        if (startedAt == null) return;
+
+        const ms = +(performance.now() - startedAt).toFixed(2);
+        console.log(`[timing] ${tool} finished in ${ms}ms`);
+      });
+  },
+});
+
+new Redop({ name: "plugin-demo" }).use(timingPlugin({}));
+```
+
+## A plugin can ship more than middleware
+
+A plugin can register:
+
+- middleware
+- hooks
+- tools
+- resources
+- prompts
+
+```ts
+import { definePlugin, Redop } from "@useagents/redop";
+
+const healthPlugin = definePlugin({
+  name: "health",
+  version: "0.1.0",
+  setup() {
+    return new Redop().tool("health", {
+      description: "Return service health",
+      handler: () => ({ ok: true, ts: Date.now() }),
+    });
+  },
+});
+```
+
+## Rule of thumb
+
+- choose middleware for one request-layer behavior
+- choose a plugin when you want a reusable bundle
+- use `definePlugin(...)` when you want a stable, publishable plugin API
+
+## See also
+
+- [Use built-in plugins](/guides/use-built-in-plugins)
+- [Middleware vs hooks vs plugins](/concepts/composition)
+- [Redop class reference](/reference/redop)

@@ -1,52 +1,34 @@
 ---
 title: Installation
-description: Install redop and understand the minimum runtime requirements.
+description: Install Redop directly or scaffold a new Bun-first MCP server with create-redop-app.
 ---
 
-import InstallSnippet from "../snippets/install.mdx";
-
-`redop` is designed for Bun-first MCP servers.
-
-## Scaffold a new app
-
-If you want a ready-to-run starter, use `create-redop-app`:
-
-```sh
-bun create redop-app
-```
-
-The generated app includes:
-
-- `redop`
-- `zod`
-- `typescript`
-- `bun-types`
-- a starter `src/index.ts`
-- transport and deploy presets
+Install Redop directly when you already have a Bun project, or scaffold a starter when you want a ready-to-run server.
 
 ## Install the package
 
-<InstallSnippet />
+```sh
+bun add @useagents/redop zod
+```
 
-## Runtime expectations
+Redop is Bun-first, so the default examples and starter flow assume you will run the server with Bun.
 
-- Bun is the primary runtime
-- Zod is optional but recommended for the best DX
-- the framework currently supports `http` and `stdio` transports
+## Scaffold a starter project
 
-If you scaffold with `create-redop-app`, `zod` is already installed for you.
+If you want a ready-to-run project instead of wiring the first files yourself:
 
-## What you get after install
+```sh
+bun create redop-app my-redop-app
+```
 
-- `Redop` for creating a server
-- built-in plugins like `logger`, `analytics`, `apiKey`, `bearer`, `rateLimit`, and `cache`
-- schema adapter helpers for Zod, Standard Schema, and JSON Schema
-- typed event objects for handlers, middleware, and hooks
+That interactive flow can generate either an HTTP or stdio starter and can add deploy presets for hosted HTTP projects.
 
-## Common mistake
+## Which path should you choose?
 
-Do not point npm package consumers at raw `src/*.ts` files long-term if you plan to publish. Keep your app code in TypeScript, but ship built artifacts when you package `redop` for npm.
+- Install `@useagents/redop` directly if you already know the shape you want.
+- Use `create-redop-app` if you want a starter app, generated files, and deployment presets.
 
 ## Next
 
-Go to [Your first server](/getting-started/first-server).
+- [Create a project with `create-redop-app`](/getting-started/create-redop-app)
+- [Build your first server](/getting-started/first-server)

@@ -1,0 +1,48 @@
+---
+title: Add Middleware and Hooks
+description: Add request-aware middleware and lifecycle hooks to a Redop server without changing the tool API.
+---
+
+This tutorial shows how to add shared behavior around your tools.
+
+## What you will add
+
+- one global middleware
+- one before hook
+- one after hook
+
+## Step 1: Add middleware
+
+```ts
+import { middleware, Redop } from "@useagents/redop";
+
+const timing = middleware(async ({ ctx, next }) => {
+  (ctx as Record<string, unknown>).startedAt = performance.now();
+  return next();
+});
+```
+
+## Step 2: Add hooks
+
+```ts
+new Redop({ name: "middleware-demo" })
+  .use(timing)
+  .onBeforeHandle(({ tool }) => {
+    console.log("starting", tool);
+  })
+  .onAfterHandle(({ tool, ctx }) => {
+    const ms = performance.now() - ((ctx as Record<string, unknown>).startedAt as number);
+    console.log("finished", tool, ms);
+  });
+```
+
+## How to think about it
+
+- middleware changes or controls execution flow
+- before hooks observe work before the handler runs
+- after hooks observe successful results and may replace them
+
+## Next
+
+- [Add auth to an HTTP server](/tutorials/add-http-auth)
+- [Concept: middleware vs hooks vs plugins](/concepts/composition)

@@ -1,0 +1,58 @@
+---
+title: API Key Authentication
+description: Protect a Redop HTTP server with the built-in apiKey plugin.
+---
+
+Use `apiKey(...)` when you want a simple shared-secret header on HTTP requests.
+
+## Basic example
+
+```ts
+import { apiKey, Redop } from "@useagents/redop";
+
+new Redop({ name: "auth-demo" })
+  .use(
+    apiKey({
+      key: process.env.API_SECRET ?? "dev-secret",
+    }),
+  )
+  .tool("ping", {
+    handler: () => ({ ok: true }),
+  });
+```
+
+Clients send:
+
+```txt
+x-api-key: dev-secret
+```
+
+## Multiple valid keys
+
+```ts
+new Redop({ name: "auth-demo" }).use(
+  apiKey({
+    keys: ["dev-key-1", "dev-key-2"],
+  }),
+);
+```
+
+## Custom validation
+
+```ts
+new Redop({ name: "auth-demo" }).use(
+  apiKey({
+    validateKey: async (value) => value.startsWith("sk-"),
+  }),
+);
+```
+
+## Advanced
+
+Use `contextKey` only if you want the validated key stored somewhere other than `ctx.apiKey`.
+
+## See also
+
+- [JWT authentication](/guides/authentication/jwt)
+- [OAuth authentication](/guides/authentication/oauth)
+- [Built-in plugins reference](/reference/built-in-plugins)

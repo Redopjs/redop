@@ -1,0 +1,27 @@
+---
+title: Send Resource Update Notifications
+description: Notify subscribed clients when a resource changes with notifyResourceChanged.
+---
+
+If a resource can change over time, mark it as subscribable and notify clients when the underlying data changes.
+
+## Step 1: Allow subscriptions
+
+```ts
+app.resource("notes://latest", {
+  name: "Latest notes",
+  subscribe: true,
+  handler: async () => ({
+    type: "text",
+    text: JSON.stringify(["draft roadmap"]),
+  }),
+});
+```
+
+## Step 2: Notify on change
+
+```ts
+app.notifyResourceChanged("notes://latest");
+```
+
+Clients that subscribed to that URI can then receive a `resources/updated` notification.

@@ -1,0 +1,34 @@
+---
+title: Add Request Context with derive
+description: Use derive to attach reusable request data to ctx before hooks, middleware, and handlers run.
+---
+
+Use `derive(...)` when several tools need the same request-derived state.
+
+## Example
+
+```ts
+import { Redop } from "@useagents/redop";
+
+const app = new Redop()
+  .derive(async ({ request }) => ({
+    authHeader: request.headers.authorization ?? null,
+    tenantId: request.headers["x-tenant-id"] ?? "public",
+  }))
+  .tool("whoami", {
+    handler: ({ ctx }) => ({
+      authHeader: ctx.authHeader,
+      tenantId: ctx.tenantId,
+    }),
+  });
+```
+
+## When to use it
+
+- auth metadata shared across many tools
+- tenant or account selection from headers
+- request-scoped utilities you do not want to recalculate in every handler
+
+## Why use `derive(...)` instead of middleware?
+
+Use `derive(...)` when you want to enrich `ctx`. Use middleware when you need to control execution flow.

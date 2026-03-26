@@ -1,229 +1,84 @@
-# redop
+# @useagents/redop
 
-Bun-native MCP server framework for building typed tools, middleware, hooks, and plugins.
+[![Deploy to Railway](https://img.shields.io/badge/Deploy-Railway-f03603)](https://redop.useagents.site/guides/deploy/railway)
+[![Deploy to Fly.io](https://img.shields.io/badge/Deploy-Fly.io-f03603)](https://redop.useagents.site/guides/deploy/fly-io)
+[![Docs: Deploy to Production](https://img.shields.io/badge/Docs-Deploy%20to%20Production-111827)](https://redop.useagents.site/guides/deploy/index)
 
-## Why Redop
+Bun-first TypeScript framework for building MCP servers with typed tools, middleware, hooks, plugins, resources, prompts, and HTTP or stdio transports.
 
-Redop is designed for Bun-first MCP servers that should feel small, typed, and composable.
-
-- typed handlers with Zod support
-- HTTP and stdio transports
-- middleware and lifecycle hooks
-- reusable plugin composition
-- Bun-native production deployment shape
-
-## Installation
-
-Install the package directly:
+## Install
 
 ```sh
-bun add redop zod
+bun add @useagents/redop zod
 ```
 
-Or scaffold a full app:
+If you want a ready-to-run starter instead:
 
 ```sh
-bun create redop-app
+bun create redop-app my-redop-app
 ```
 
 ## Quick start
 
 ```ts
-import { Redop } from "redop";
+import { Redop } from "@useagents/redop";
 import { z } from "zod";
 
 new Redop({
   name: "my-mcp-server",
   version: "0.1.0",
 })
-  .tool("search", {
-    description: "Search the web",
+  .tool("search_docs", {
+    description: "Search docs",
     input: z.object({
       query: z.string().min(1),
     }),
-    handler: ({ input }) => {
-      return {
-        query: input.query,
-        results: [],
-      };
-    },
+    handler: ({ input }) => ({
+      query: input.query,
+      results: [],
+    }),
   })
-  .listen({
-    port: Number(process.env.PORT ?? 3000),
-    hostname: "0.0.0.0",
-    cors: true,
-    onListen: ({ url }) => {
-      console.log(`redop ready -> ${url}`);
-    },
-  });
+  .listen(3000);
 ```
 
-## Core concepts
+For a hosted server, your MCP endpoint will be available at `http://localhost:3000/mcp`.
 
-### Tools
+## What Redop gives you
 
-Use `.tool(...)` to register MCP tools.
+- typed tool handlers with schema-driven parsing
+- middleware and lifecycle hooks
+- reusable plugin composition
+- resources and prompts alongside tools
+- HTTP and stdio transports from one API
 
-```ts
-app.tool("ping", {
-  description: "Health check",
-  handler: () => ({ ok: true }),
-});
-```
+## Learn more
 
-### Typed input
+- Docs: https://redop.useagents.site
+- Installation: https://redop.useagents.site/getting-started/installation
+- First server: https://redop.useagents.site/getting-started/first-server
+- Deploy to production: https://redop.useagents.site/guides/deploy/index
+- HTTP debugging: https://redop.useagents.site/guides/debug-http
+- API reference: https://redop.useagents.site/reference/redop
 
-Pass a Zod schema to get typed handler input.
+## Deploy
 
-```ts
-app.tool("search", {
-  input: z.object({
-    query: z.string(),
-    limit: z.number().int().min(1).max(50).default(10),
-  }),
-  handler: ({ input }) => {
-    return search(input.query, input.limit);
-  },
-});
-```
+For the built-in HTTP transport, start with Railway or Fly.io.
 
-### Middleware
+- Railway guide: https://redop.useagents.site/guides/deploy/railway
+- Fly.io guide: https://redop.useagents.site/guides/deploy/fly-io
+- Docker guide: https://redop.useagents.site/guides/deploy/docker
+- Vercel caveat: https://redop.useagents.site/guides/deploy/vercel
 
-Middleware wraps tool execution and can read request metadata and mutate `ctx`.
-
-```ts
-import { middleware } from "redop";
-
-app.use(
-  middleware(async ({ request, ctx, next }) => {
-    ctx.startedAt = performance.now();
-    console.log(request.transport);
-    return next();
-  })
-);
-```
-
-### Hooks
-
-Use global hooks for cross-cutting behavior.
-
-```ts
-app
-  .onBeforeHandle(({ ctx }) => {
-    ctx.startedAt = performance.now();
-  })
-  .onAfterHandle(({ tool, ctx }) => {
-    console.log(tool, performance.now() - ctx.startedAt);
-  });
-```
-
-### Plugins
-
-Any `Redop` instance can be reused as a plugin with `.use(...)`.
-
-```ts
-import { analytics, logger, rateLimit } from "redop";
-
-app
-  .use(logger({ level: "info" }))
-  .use(analytics({ sink: "console" }))
-  .use(rateLimit({ max: 60, window: "1m" }));
-```
-
-## Transports
-
-### HTTP
-
-Use HTTP for hosted MCP servers:
-
-```ts
-app.listen({
-  port: Number(process.env.PORT ?? 3000),
-  hostname: "0.0.0.0",
-  cors: true,
-});
-```
-
-Auto-mounted routes:
-
-- `POST /mcp`
-- `GET /mcp`
-- `DELETE /mcp`
-- `GET /mcp/health`
-- `GET /mcp/schema`
-
-### STDIO
-
-Use stdio for local MCP host integrations:
-
-```ts
-app.listen({
-  transport: "stdio",
-});
-```
-
-## Lifecycle
-
-Execution order:
-
-```txt
-onTransform -> onBeforeHandle -> tool.before -> middleware -> handler -> tool.after -> onAfterHandle -> mapResponse
-```
-
-## Schema support
-
-Redop works with:
-
-- Zod
-- JSON Schema
-- Standard Schema
-- custom adapters
-
-Example:
-
-```ts
-app.tool("echo", {
-  input: {
-    type: "object",
-    properties: {
-      message: { type: "string" },
-    },
-    required: ["message"],
-  },
-  handler: ({ input }) => input.message,
-});
-```
-
-## Production shape
-
-For production, the default Bun HTTP shape is:
-
-```ts
-app.listen({
-  port: Number(process.env.PORT ?? 3000),
-  hostname: "0.0.0.0",
-  cors: true,
-});
-```
-
-Use:
-
-- `process.env.PORT`
-- `0.0.0.0`
-- `/mcp/health` for health checks
-
-## Examples
-
-See the local examples:
+## Local examples
 
 - [`basic.ts`](/home/evans/projects/redop-ai/packages/redop/examples/basic.ts)
 - [`with-zod.ts`](/home/evans/projects/redop-ai/packages/redop/examples/with-zod.ts)
 - [`plugins.ts`](/home/evans/projects/redop-ai/packages/redop/examples/plugins.ts)
 
-## Documentation
+Plugin docs:
 
-- Docs site: https://redop.useagents.site
-- Docs source: [`apps/docs`](/home/evans/projects/redop-ai/apps/docs)
+- Built-in plugins: https://redop.useagents.site/reference/built-in-plugins
+- Build a plugin or middleware: https://redop.useagents.site/guides/build-plugin-or-middleware
 
 ## License
 

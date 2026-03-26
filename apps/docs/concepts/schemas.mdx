@@ -1,0 +1,23 @@
+---
+title: Schemas and Adapters
+description: Understand how Redop turns one input schema into both runtime parsing and MCP discovery metadata.
+---
+
+Redop uses one `input` definition for two jobs:
+
+- runtime parsing
+- JSON Schema generation for tool discovery
+
+## The default path
+
+Zod is the smoothest path for new TypeScript projects because it gives you runtime validation and inferred handler types in one place.
+
+## Other supported paths
+
+- Standard Schema-compatible libraries
+- plain JSON Schema objects
+- custom adapters
+
+## Practical rule
+
+Use the simplest schema system your app already understands well. Redop is flexible, but your team will move fastest when one schema style becomes the default.

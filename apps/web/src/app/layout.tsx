@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-
 import "@/styles/globals.css";
 import { SITE_KEYWORDS, siteConfig } from "@/config/site";
 import { cn } from "@/lib/utils";

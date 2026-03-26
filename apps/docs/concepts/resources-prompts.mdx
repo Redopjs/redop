@@ -1,0 +1,24 @@
+---
+title: Resources and Prompts
+description: Understand when a problem should be modeled as a tool, a resource, or a prompt in Redop.
+---
+
+Tools are not the whole MCP surface.
+
+## Use a tool when
+
+- the client is asking the server to do work
+- the result depends on action or business logic
+- the caller expects an operation
+
+## Use a resource when
+
+- the client needs readable data
+- the data has a stable URI
+- subscriptions or change notifications make sense
+
+## Use a prompt when
+
+- the client needs reusable prompt material
+- you want named arguments and prompt metadata
+- the server should package prompt content, not execute work

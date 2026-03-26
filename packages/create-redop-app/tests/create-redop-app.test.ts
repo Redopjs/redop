@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { exists, rm } from "node:fs/promises";
+import { exists, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 
 import { generateProject } from "../src/generator";
@@ -21,9 +21,10 @@ describe("Generator Logic", () => {
   test("should generate core files for a standard http app", async () => {
     const options: ResolvedOptions = {
       appName: "test-app",
-      components: ["tools"],
+      components: ["tools", "resources", "prompts"],
       deploy: "none",
       packageManager: "bun",
+      schemaLibrary: "zod",
       targetDir: TEST_DIR,
       template: "standard",
       transport: "http",
@@ -37,5 +38,32 @@ describe("Generator Logic", () => {
     expect(await exists(path.join(TEST_DIR, "package.json"))).toBe(true);
     expect(await exists(path.join(TEST_DIR, "src/index.ts"))).toBe(true);
     expect(await exists(path.join(TEST_DIR, "tsconfig.json"))).toBe(true);
+
+    const source = await readFile(path.join(TEST_DIR, "src/index.ts"), "utf8");
+    expect(source.includes('.tool("ping"')).toBe(true);
+    expect(source.includes('.resource("app://status"')).toBe(true);
+    expect(source.includes('.prompt("summarise_status"')).toBe(true);
+  });
+
+  test("should generate a json-schema based tool starter without zod", async () => {
+    const options: ResolvedOptions = {
+      appName: "json-schema-app",
+      components: ["tools"],
+      deploy: "none",
+      packageManager: "bun",
+      schemaLibrary: "json-schema",
+      targetDir: TEST_DIR,
+      template: "standard",
+      transport: "http",
+    };
+
+    await generateProject(options);
+
+    const pkg = await readFile(path.join(TEST_DIR, "package.json"), "utf8");
+    const source = await readFile(path.join(TEST_DIR, "src/index.ts"), "utf8");
+
+    expect(pkg.includes('"zod"')).toBe(false);
+    expect(source.includes('import { z } from "zod";')).toBe(false);
+    expect(source.includes('type: "object"')).toBe(true);
   });
 });

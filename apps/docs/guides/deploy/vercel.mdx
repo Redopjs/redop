@@ -1,0 +1,82 @@
+---
+title: Deploy to Vercel
+description: Understand the current Vercel caveat for Redop’s built-in HTTP transport and when a custom Vercel path might still make sense.
+---
+
+Vercel is not a drop-in production target for Redop’s current built-in HTTP transport.
+
+## Why this is a caveat
+
+Redop’s built-in HTTP transport is a long-running Bun server. Vercel is a function-oriented platform, so the default Redop server shape does not map cleanly to it the way Railway or Fly.io does.
+
+## Current posture
+
+| Item | Value |
+| ---- | ----- |
+| Recommended for built-in Redop HTTP transport | no |
+| Recommended transport | no default recommendation for the built-in HTTP server |
+| `create-redop-app` preset | starting point only |
+| Generated files | `vercel.json` |
+| Required env vars | depends on your custom Vercel path |
+| Better choices today | Railway, Fly.io, Docker |
+| Use Vercel only if | you are building a custom constrained deployment path |
+
+## Generated `vercel.json`
+
+This is the exact file `create-redop-app --deploy vercel` adds today:
+
+```json
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "bunVersion": "1.x"
+}
+```
+
+## What the preset means
+
+If you choose `--deploy vercel`, the generated files help you start exploring a Vercel-compatible shape, but they do not mean Redop currently ships a first-class Vercel transport.
+
+Do not read the preset as “production-ready parity with Railway or Fly.io.”
+
+The difference from frameworks like Elysia is that Redop does not yet ship a Vercel-style `fetch`/function adapter. Its built-in HTTP transport is still a long-running `Bun.serve(...)` server shape.
+
+<Note>
+We do plan to add a proper Vercel-compatible adapter so this deployment path can become first-class instead of caveat-only.
+</Note>
+
+## When Vercel can still make sense
+
+Vercel can still be reasonable if:
+
+- you are intentionally building a custom Fetch-based or function-based adapter
+- you understand the limits of the platform for long-lived MCP HTTP behavior
+- you are optimizing for a broader Vercel deployment environment, not the default Redop hosting model
+
+## How to validate a custom Vercel path
+
+If you do build a custom Vercel adapter, validate it the same way you would validate any MCP HTTP deployment:
+
+```sh
+curl -X POST https://your-app.vercel.app/mcp \
+  -H 'Content-Type: application/json' \
+  --data '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"vercel-check","version":"1.0.0"}}}'
+```
+
+What success looks like:
+
+- the request reaches your custom handler
+- `/mcp` returns a valid JSON-RPC initialize response
+- you are not relying on the default long-running Redop HTTP transport shape
+
+## Recommended alternative
+
+If you want the built-in Redop HTTP transport today:
+
+- use [Deploy to Railway](/guides/deploy/railway) for the fastest hosted setup
+- use [Deploy to Fly.io](/guides/deploy/fly-io) for Docker-based always-on deployment
+- use [Deploy with Docker](/guides/deploy/docker) for self-hosting or custom infra
+
+## Next
+
+- [Deploy to Production overview](/guides/deploy/index)
+- [Deploy to Railway](/guides/deploy/railway)

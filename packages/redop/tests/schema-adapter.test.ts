@@ -3,7 +3,14 @@ import { describe, expect, test } from "bun:test";
 import { z } from "zod";
 
 import type { RequestMeta } from "../src/index";
-import { middleware, Redop } from "../src/index";
+import {
+  arktypeAdapter,
+  jsonSchemaAdapter,
+  middleware,
+  Redop,
+  typeboxAdapter,
+  valibotAdapter,
+} from "../src/index";
 
 function expectType<T>(_value: T) {}
 
@@ -108,6 +115,67 @@ describe("Standard Schema adapter", () => {
     });
 
     expect(await runTool(app, "echo", { message: "hello" })).toBe("hello");
+  });
+
+  test("exports a named JSON Schema adapter for explicit use", async () => {
+    const app = new Redop({
+      schemaAdapter: jsonSchemaAdapter(),
+    }).tool("echo", {
+      handler: ({ input }) => input.message,
+      input: {
+        type: "object",
+        properties: {
+          message: { type: "string" },
+        },
+        required: ["message"],
+      },
+    });
+
+    expect(await runTool(app, "echo", { message: "hello" })).toBe("hello");
+  });
+
+  test("exports named standard-schema aliases for valibot and arktype style usage", async () => {
+    const valibotApp = new Redop({
+      schemaAdapter: valibotAdapter(),
+    }).tool("typed_defaults", {
+      handler: ({ input }) => input.page,
+      input: z.object({
+        page: z.coerce.number(),
+      }),
+    });
+
+    const arktypeApp = new Redop({
+      schemaAdapter: arktypeAdapter(),
+    }).tool("typed_defaults", {
+      handler: ({ input }) => input.page,
+      input: z.object({
+        page: z.coerce.number(),
+      }),
+    });
+
+    expect(await runTool(valibotApp, "typed_defaults", { page: "5" })).toBe(5);
+    expect(await runTool(arktypeApp, "typed_defaults", { page: "6" })).toBe(6);
+  });
+
+  test("exports an explicit typebox adapter", async () => {
+    const schema = {
+      [Symbol.for("TypeBox.Kind")]: "Object",
+      properties: {
+        message: { type: "string" },
+      },
+      required: ["message"],
+      type: "object",
+    };
+
+    const app = new Redop({
+      schemaAdapter: typeboxAdapter(),
+    }).tool("echo", {
+      handler: ({ input }) => (input as { message: string }).message,
+      input: schema,
+    });
+
+    expect(await runTool(app, "echo", { message: "hello" })).toBe("hello");
+    expect(app.getTool("echo")?.inputSchema).toMatchObject(schema);
   });
 
   test("middleware can read typed input and request metadata", async () => {

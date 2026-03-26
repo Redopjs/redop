@@ -1,9 +1,11 @@
-import { analytics, logger, Redop, rateLimit } from "../src/index";
+import { Redop } from "../src/index";
 
-new Redop()
-  .use(logger({ level: "info" }))
-  .use(analytics({ sink: "console" }))
-  .use(rateLimit({ max: 100, window: "1m" }))
+new Redop({
+  name: "redop",
+  title: "Redop",
+  description: "Hello mcp world",
+})
+
   .onBeforeHandle(({ ctx }) => {
     ctx.startedAt = performance.now();
   })
@@ -24,7 +26,7 @@ new Redop()
   })
   .listen({
     cors: true,
-    hostname: "0.0.0.0",
+    debug: process.env.DEBUG_HTTP === "1",
     onListen: ({ url }) => console.log(`redop ready → ${url}`),
     port: process.env.PORT ?? 3000,
   });

@@ -1,0 +1,46 @@
+---
+title: Connect over stdio
+description: Run a Redop server over stdio for local MCP host integrations.
+---
+
+Use stdio when the MCP client launches your server as a local command and communicates through stdin and stdout.
+
+## Start the stdio transport
+
+```ts
+import { Redop } from "@useagents/redop";
+
+new Redop({
+  name: "stdio-server",
+  version: "0.1.0",
+})
+  .tool("ping", {
+    handler: () => ({ pong: true }),
+  })
+  .listen({
+    transport: "stdio",
+  });
+```
+
+## Run it
+
+```sh
+bun run src/index.ts
+```
+
+Your MCP host should launch that command and then talk to the process over stdio.
+
+## Important stdio rule
+
+Do not write logs to stdout in stdio mode. Stdout is the MCP message channel. Send diagnostic output to stderr instead.
+
+## When stdio is the right choice
+
+- local desktop MCP clients
+- editor integrations that launch a command directly
+- tools that do not need a long-running network service
+
+## Next
+
+- [Verify with local clients](/getting-started/verify-clients)
+- [Choose between HTTP and stdio](/guides/choose-transport)

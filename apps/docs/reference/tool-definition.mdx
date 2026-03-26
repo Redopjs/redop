@@ -1,36 +1,71 @@
 ---
-title: Tool Definition Reference
-description: Reference for ToolDef, handler events, and tool-local hooks.
+title: Tool Definition
+description: Reference for Redop tool definitions, including schemas, hooks, middleware, metadata, and task hints.
 ---
 
-## Core shape
+## Shape
 
 ```ts
-app.tool("name", {
-  description: "Human-friendly description",
-  input,
-  before: ({ input, ctx, request, tool }) => {},
-  handler: ({ input, ctx, request, tool }) => {},
-  after: ({ input, result, ctx, request, tool }) => {},
+app.tool("tool_name", {
+  title: "Optional UI title",
+  description: "What the tool does",
+  input: z.object({
+    query: z.string(),
+  }),
+  outputSchema: {
+    type: "object",
+    properties: {
+      query: { type: "string" },
+    },
+  },
+  taskSupport: "optional",
   annotations: {
     readOnlyHint: true,
+  },
+  middleware: [myToolMiddleware],
+  before: async ({ input, ctx }) => {},
+  after: async ({ result }) => result,
+  handler: async ({ input, ctx, request, tool, emit, signal }) => {
+    return { query: input.query };
   },
 });
 ```
 
-## Important fields
+## Fields
 
-- `description` is shown in tool listings
-- `input` provides schema parsing and JSON Schema generation
-- `before` is tool-local lifecycle before middleware
-- `handler` does the actual work
-- `after` runs after successful handler/middleware completion
-- `annotations` exposes MCP tool hints
+| Field | Required | Purpose |
+| ----- | -------- | ------- |
+| `description` | No | Human-readable description shown to clients. |
+| `input` | No | Schema used for runtime parsing and tool discovery. |
+| `outputSchema` | No | Structured output schema surfaced to clients when the result is an object. |
+| `title` | No | UI-friendly display title. |
+| `icons` | No | Tool icons for clients that support them. |
+| `annotations` | No | Tool hints such as `readOnlyHint` or `destructiveHint`. |
+| `middleware` | No | Middleware scoped to this tool only. |
+| `before` | No | Tool-local hook that runs before middleware and the handler. |
+| `after` | No | Tool-local hook that runs after a successful result and may replace it. |
+| `taskSupport` | No | Task support hint: `"forbidden"`, `"optional"`, or `"required"`. |
+| `handler` | Yes | Tool implementation. |
 
-## Event object recap
+## Handler event
 
-- `input` = parsed tool input
-- `ctx` = request-scoped mutable state
-- `request` = transport metadata
-- `tool` = resolved tool name
-- `result` = only available in `after`
+The handler receives:
+
+- `input` for parsed tool input
+- `ctx` for mutable per-request context
+- `request` for transport metadata
+- `tool` for the resolved tool name
+- `emit.progress(...)` for progress updates
+- `signal` for cancellation support
+
+## Notes
+
+- If you omit `input`, the handler receives the raw params object.
+- Tool names are prefixed with underscores when registered inside `group(...)`.
+- Tool-local hooks are the right place for per-tool post-processing.
+- Shared concerns belong in global hooks or plugins instead.
+
+## See also
+
+- [Request and context reference](/reference/request-context)
+- [Lifecycle and execution order](/concepts/lifecycle)

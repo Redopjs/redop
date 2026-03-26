@@ -1,0 +1,74 @@
+---
+title: Build a Minimal HTTP Server
+description: Learn Redop by building a small HTTP MCP server with two tools and verifying it over /mcp.
+---
+
+This tutorial walks you through the smallest useful hosted Redop server.
+
+## What you will build
+
+By the end, you will have:
+
+- an HTTP Redop server
+- one simple health tool
+- one tool with input
+- a working MCP endpoint at `/mcp`
+
+## Step 1: Create the server
+
+```ts
+import { Redop } from "@useagents/redop";
+
+const app = new Redop({
+  name: "hello-redop",
+  title: "Hello Redop",
+  version: "0.1.0",
+});
+```
+
+## Step 2: Add a no-input tool
+
+```ts
+app.tool("ping", {
+  description: "Health check",
+  handler: () => ({ pong: true, ts: Date.now() }),
+});
+```
+
+## Step 3: Add a tool with input
+
+```ts
+app.tool("echo", {
+  description: "Echo a message",
+  input: {
+    type: "object",
+    properties: {
+      message: { type: "string" },
+    },
+    required: ["message"],
+  },
+  handler: ({ input }) => ({
+    message: input.message,
+  }),
+});
+```
+
+## Step 4: Start HTTP
+
+```ts
+app.listen(3000);
+```
+
+## Step 5: Run and verify
+
+```sh
+bun run src/index.ts
+```
+
+Then connect a client to `http://localhost:3000/mcp`.
+
+## What to do next
+
+Now that the transport works, add a schema so the handler input becomes typed.
+
+- [Add typed input with Zod](/tutorials/add-zod-tool)

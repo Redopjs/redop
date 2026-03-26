@@ -1,0 +1,33 @@
+---
+title: Register Prompts
+description: Add MCP prompts to a Redop server with prompt.
+---
+
+Use prompts when the client should request reusable prompt material instead of running a tool.
+
+## Example
+
+```ts
+app.prompt("code_review", {
+  description: "Review a code snippet",
+  arguments: [
+    { name: "code", required: true },
+    { name: "language" },
+  ],
+  handler: ({ arguments: args }) => [
+    {
+      role: "user",
+      content: {
+        type: "text",
+        text: `Review this ${args?.language ?? "code"}:\n${args?.code ?? ""}`,
+      },
+    },
+  ],
+});
+```
+
+## When prompts fit best
+
+- reusable prompt building blocks
+- prompt material that should stay alongside your server logic
+- flows where the client wants prompt metadata and arguments, not a tool call

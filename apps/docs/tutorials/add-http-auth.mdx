@@ -1,0 +1,47 @@
+---
+title: Add Auth to an HTTP Server
+description: Protect an HTTP Redop server with the built-in apiKey plugin.
+---
+
+This tutorial shows the quickest way to add auth to a hosted Redop server.
+
+## What you will add
+
+- header-based auth with a built-in plugin
+- protected HTTP tools
+- a client call that includes the expected header
+
+## Step 1: Add the plugin
+
+```ts
+import { apiKey, Redop } from "@useagents/redop";
+
+new Redop({ name: "auth-demo" })
+  .use(
+    apiKey({
+      key: process.env.API_SECRET ?? "dev-secret",
+    }),
+  )
+  .tool("ping", {
+    handler: () => ({ ok: true }),
+  });
+```
+
+## Step 2: Call the tool with the header
+
+Send the header your plugin expects:
+
+```txt
+x-api-key: dev-secret
+```
+
+## Step 3: Keep advanced config optional
+
+If you need to change where the validated value is stored on `ctx`, use `contextKey`. Most servers can ignore that option.
+
+## Next
+
+- [API key authentication](/guides/authentication/api-key)
+- [JWT authentication](/guides/authentication/jwt)
+- [Build a plugin or middleware](/guides/build-plugin-or-middleware)
+- [Debug HTTP connections and sessions](/guides/debug-http)

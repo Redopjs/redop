@@ -1,0 +1,37 @@
+---
+title: Transport Model and Compatibility
+description: Understand how Redop chooses transports, what HTTP and stdio expose, and what the current HTTP transport optimizes for.
+---
+
+Redop currently supports two transports:
+
+- `http`
+- `stdio`
+
+## How transport selection works
+
+- `listen(3000)` defaults to HTTP
+- `listen({ port: ... })` defaults to HTTP
+- `listen({ transport: "stdio" })` forces stdio
+- `listen({ transport: "http" })` forces HTTP
+
+## HTTP in practice
+
+The HTTP transport gives you:
+
+- a network endpoint at `/mcp`
+- session-aware client communication
+- a development UI in non-production mode unless disabled
+- transport debug logs with `debug: true`
+
+## stdio in practice
+
+The stdio transport gives you:
+
+- a local command-based integration path
+- no network port
+- one strict rule: keep stdout clean for MCP messages
+
+## Compatibility notes
+
+The current HTTP transport negotiates multiple MCP protocol versions and keeps compatibility behavior for local tooling, including Inspector-style workflows.

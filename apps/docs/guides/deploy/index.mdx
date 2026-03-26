@@ -1,0 +1,45 @@
+---
+title: Deploy to Production
+description: Choose the right production deployment shape for a Redop HTTP server and then follow a platform-specific guide.
+---
+
+Redop HTTP is a long-running Bun server. That means the best production fit today is a platform that runs a persistent Bun process, not a purely serverless request model.
+
+## Choose a platform
+
+| Platform | Best for | Recommended transport | `create-redop-app` preset | Fit today |
+| -------- | -------- | --------------------- | ------------------------- | --------- |
+| Railway | Fastest hosted setup | `http` | `railway` | Recommended |
+| Fly.io | Always-on Docker deployment | `http` | `fly-io` | Recommended |
+| Docker | Self-hosting or custom infra | `http` | `fly-io` gives you a starting Dockerfile | Recommended |
+| Vercel | Custom constrained setups | not recommended for the built-in HTTP transport | `vercel` | Caveat only |
+
+## Redop hosting model
+
+- Use `http` for hosted MCP servers.
+- Bind to `0.0.0.0`.
+- Read `PORT` from the environment.
+- Expose the MCP endpoint at `/mcp`.
+- Do not assume Redop mounts `/mcp/health` or `/mcp/schema` by default.
+- If your platform wants a separate health route, enable one explicitly with `health: true` or `health: { path: "/health" }`.
+
+`stdio` is for local MCP host integrations such as command-based clients. It is not the normal production path for a hosted Redop HTTP server.
+
+## Quick verification shape
+
+No matter which platform you choose, a healthy Redop deployment should answer an MCP `initialize` request on `/mcp`.
+
+```sh
+curl -X POST http://localhost:3000/mcp \
+  -H 'Content-Type: application/json' \
+  --data '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"manual-check","version":"1.0.0"}}}'
+```
+
+You should get a JSON-RPC response with `result.protocolVersion`, `serverInfo`, and capabilities.
+
+## Recommended paths
+
+- Choose [Deploy to Railway](/guides/deploy/railway) if you want the shortest path to a hosted Bun service.
+- Choose [Deploy to Fly.io](/guides/deploy/fly-io) if you want Docker-based deployment with an always-on app shape.
+- Choose [Deploy with Docker](/guides/deploy/docker) if you want to run Redop on your own infra or in a monorepo.
+- Read [Deploy to Vercel](/guides/deploy/vercel) only if you specifically need Vercel and understand the built-in transport caveat.

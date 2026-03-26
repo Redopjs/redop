@@ -2,9 +2,19 @@ import path from "node:path";
 
 import * as p from "@clack/prompts";
 import chalk from "chalk";
-
-import { DEPLOY_TARGETS, TRANSPORTS } from './types';
-import type { DeployTarget, ResolvedOptions, Transport } from './types';
+import type {
+  Component,
+  DeployTarget,
+  ResolvedOptions,
+  SchemaLibrary,
+  Transport,
+} from "./types";
+import {
+  COMPONENTS,
+  DEPLOY_TARGETS,
+  SCHEMA_LIBRARIES,
+  TRANSPORTS,
+} from "./types";
 
 /**
  * Runs the interactive CLI prompts to gather project configuration.
@@ -13,15 +23,35 @@ import type { DeployTarget, ResolvedOptions, Transport } from './types';
  */
 export async function runPrompts(
   initialName?: string,
-  flags?: { transport?: string; deploy?: string }
+  flags?: {
+    transport?: string;
+    deploy?: string;
+    components?: string;
+    schema?: string;
+  }
 ): Promise<ResolvedOptions> {
+  const componentFlags =
+    flags?.components
+      ?.split(",")
+      .map((value) => value.trim())
+      .filter((value): value is Component =>
+        COMPONENTS.includes(value as Component)
+      ) ?? [];
+
   const project = await p.group(
     {
       components: () =>
-        p.multiselect({
-          message: "Select components to initialize:",
-          options: [{ value: "tools", label: "Tools", hint: "recommended" }],
-        }),
+        componentFlags.length > 0
+          ? Promise.resolve(componentFlags)
+          : p.multiselect({
+              message: "Select components to initialize:",
+              initialValues: ["tools"],
+              options: [
+                { value: "tools", label: "Tools", hint: "recommended" },
+                { value: "resources", label: "Resources" },
+                { value: "prompts", label: "Prompts" },
+              ],
+            }),
       confirm: ({ results }) =>
         p.confirm({
           message: `Creating a new redop app in ${chalk.cyan(
@@ -71,6 +101,25 @@ export async function runPrompts(
             { value: "npm", label: "npm" },
           ],
         }),
+      schemaLibrary: () => {
+        if (
+          flags?.schema &&
+          SCHEMA_LIBRARIES.includes(flags.schema as SchemaLibrary)
+        ) {
+          return Promise.resolve(flags.schema as SchemaLibrary);
+        }
+
+        return p.select({
+          message: "Select a schema library:",
+          initialValue: "zod",
+          options: [
+            { value: "zod", label: "Zod", hint: "default" },
+            { value: "json-schema", label: "JSON Schema" },
+            { value: "valibot", label: "Valibot" },
+            { value: "typebox", label: "TypeBox" },
+          ],
+        });
+      },
       template: () =>
         p.select({
           message: "Select a template:",
@@ -110,9 +159,18 @@ export async function runPrompts(
 
   return {
     appName: project.name as string,
-    components: project.components as string[],
+    components: (() => {
+      const selected = (
+        (project.components as Component[] | undefined)?.filter((value) =>
+          COMPONENTS.includes(value)
+        ) as Component[] | undefined
+      )?.slice();
+
+      return selected && selected.length > 0 ? selected : ["tools"];
+    })(),
     deploy: (project.deploy as DeployTarget) || "none",
     packageManager: project.packageManager as "bun" | "npm",
+    schemaLibrary: (project.schemaLibrary as SchemaLibrary) || "zod",
     targetDir: path.resolve(process.cwd(), project.name as string),
     template: project.template as string,
     transport: project.transport as Transport,

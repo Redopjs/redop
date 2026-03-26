@@ -1,0 +1,59 @@
+---
+title: listen() Options
+description: Reference for the listen options Redop exposes for HTTP and stdio transports, including current implementation caveats.
+---
+
+## Supported call styles
+
+```ts
+app.listen();
+app.listen(3000);
+app.listen(3000, "0.0.0.0");
+app.listen({
+  port: 3000,
+  hostname: "0.0.0.0",
+  debug: true,
+});
+```
+
+## Common shape
+
+```ts
+app.listen({
+  transport: "http",
+  port: 3000,
+  hostname: "0.0.0.0",
+  path: "/mcp",
+  health: { path: "/health" },
+  debug: true,
+  devUI: true,
+  sessionTimeout: 60_000,
+  onListen: ({ url }) => {
+    console.log(url);
+  },
+});
+```
+
+## Implemented options
+
+| Option | Notes |
+| ------ | ----- |
+| `transport` | `"http"` or `"stdio"`. |
+| `port` | Starts HTTP when present. Also available via `listen(3000)`. |
+| `hostname` | HTTP bind address. Defaults to `127.0.0.1`. |
+| `path` | HTTP MCP path. Defaults to `/mcp`. |
+| `health` | Optional HTTP health endpoint. Use `true` for `/health` or `{ path: "/health" }` for a custom path. Disabled by default. |
+| `debug` | Enables HTTP transport logs. |
+| `devUI` | Controls the development UI. Defaults to enabled outside production. |
+| `sessionTimeout` | Session TTL for HTTP sessions. |
+| `onListen` | Callback fired when the HTTP server starts. |
+
+## Typed but currently caveated
+
+These options exist in the public type surface, but the current HTTP implementation is limited:
+
+| Option | Current state |
+| ------ | ------------- |
+| `cors` | Present in the type surface, but the current transport uses a simple built-in allow-origin behavior rather than a rich policy implementation. |
+| `maxBodySize` | Present in the type surface, but not currently enforced by the HTTP transport. |
+| `tls` | Present in the type surface and used when formatting the reported URL, but the current HTTP transport does not yet wire Bun TLS startup from this option. |

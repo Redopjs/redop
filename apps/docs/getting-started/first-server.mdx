@@ -1,14 +1,14 @@
 ---
 title: Your First Server
-description: Build and run a minimal redop MCP server over HTTP.
+description: Build and run the smallest useful Redop server before you add schemas, middleware, or auth.
 ---
 
-This is the smallest useful `redop` server: one tool, one handler, one transport.
+This is the fastest way to get a working Redop server running end to end.
 
 ## Copy-paste example
 
 ```ts
-import { Redop } from "redop";
+import { Redop } from "@useagents/redop";
 
 new Redop({
   name: "hello-redop",
@@ -16,37 +16,32 @@ new Redop({
 })
   .tool("ping", {
     description: "Health check",
-    handler: () => {
-      return { pong: true, ts: Date.now() };
-    },
+    handler: () => ({ pong: true, ts: Date.now() }),
   })
-  .listen({
-    port: process.env.PORT ?? 3000,
-    hostname: "0.0.0.0",
-    cors: true,
-  });
+  .listen(3000);
 ```
 
-## What happens here
+## What this does
 
-- `new Redop(...)` defines the MCP server identity
-- `tool("ping", ...)` registers a tool with no input schema
-- `handler` returns plain serializable data
-- `listen(...)` starts the HTTP transport
+- `new Redop(...)` defines the server identity returned during initialize
+- `.tool(...)` registers one MCP tool
+- the handler returns plain serializable data
+- `.listen(3000)` starts the HTTP transport on port `3000`
 
-## When to use this shape
+## Run it
 
-Use this as your default starting point when:
+```sh
+bun run src/index.ts
+```
 
-- you want to verify your MCP client can connect
-- your first tool does not need input validation yet
-- you want to add middleware and hooks incrementally
+Once it starts, your MCP endpoint will be available at `http://localhost:3000/mcp`.
 
-## Common mistake
+## Why start this small?
 
-Do not overbuild your first tool. Get one end-to-end MCP tool working first, then add input schemas, auth, plugins, and analytics once the shape feels right.
+Start with one end-to-end tool first. Once the transport works and your client can connect, add schemas, middleware, hooks, resources, prompts, or auth one piece at a time.
 
 ## Next
 
-- [Running over HTTP vs stdio](/getting-started/transports)
-- [Your first typed Zod tool](/getting-started/typed-zod-tool)
+- [Connect over HTTP](/getting-started/connect-http)
+- [Connect over stdio](/getting-started/connect-stdio)
+- [Verify with local clients](/getting-started/verify-clients)

@@ -1,0 +1,29 @@
+---
+title: Choose Between HTTP and stdio
+description: Decide when to use the hosted HTTP transport and when to use the local stdio transport.
+---
+
+Pick the transport based on how the MCP client will reach your server.
+
+| Use case | Best transport |
+| -------- | -------------- |
+| Hosted network service | `http` |
+| Local command launched by the client | `stdio` |
+| Inspect with a URL at `/mcp` | `http` |
+| Desktop or editor integration that launches a process | `stdio` |
+
+## Choose HTTP when
+
+- you want a long-running Bun service
+- you need a URL clients can connect to
+- you want browser-based debugging with the dev UI
+
+## Choose stdio when
+
+- the client already knows how to launch a local command
+- you do not need a network port
+- you want the simplest local integration path
+
+## Remember
+
+If you call `listen(3000)` or pass a `port` in `listen(...)`, Redop defaults to HTTP. If you omit the port entirely, defaulting falls back to stdio unless you set `transport` explicitly.

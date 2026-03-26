@@ -1,19 +1,16 @@
 ---
 title: Redop Reference
-description: Concise reference for the Redop class and its main chainable methods.
+description: Reference for the Redop constructor, its chainable methods, and the public introspection helpers.
 ---
 
 ## Constructor
 
 ```ts
 new Redop({
-  // Identity (advertised during MCP initialize)
-  name: "my-mcp-server", // machine-readable slug. Default: "redop"
-  title: "My MCP Server", // human-readable display name
-  version: "1.0.0", // semver string. Default: "0.1.0"
+  name: "my-mcp-server",
+  title: "My MCP Server",
+  version: "0.1.0",
   description: "Does X and Y.",
-
-  // Client UI
   icons: [
     {
       src: "https://example.com/icon.svg",
@@ -22,36 +19,61 @@ new Redop({
     },
   ],
   websiteUrl: "https://example.com/docs",
-
-  // Emitted as `instructions` at the top level of InitializeResult.
-  // Surfaced to the model at session start — keep concise, it consumes context.
   instructions: "Always call search before fetch.",
-
-  // Schema validation
-  schemaAdapter, // optional — auto-detects Zod, TypeBox, Valibot
+  capabilities: {
+    tools: true,
+    resources: true,
+    prompts: true,
+  },
+  schemaAdapter,
 });
 ```
 
+## Constructor options
+
+| Option | Purpose |
+| ------ | ------- |
+| `name` | Machine-readable server name. Defaults to `"redop"`. |
+| `title` | Human-readable display name. |
+| `version` | Version returned during initialize. Defaults to `"0.1.0"`. |
+| `description` | Short server description for client UIs. |
+| `icons` | Optional icon metadata for client UIs. |
+| `websiteUrl` | Canonical site or docs URL. |
+| `instructions` | Guidance surfaced to MCP clients during initialize. |
+| `capabilities` | Enable or disable advertised MCP capabilities. |
+| `schemaAdapter` | Override schema auto-detection with a custom adapter. |
+
 ## Main methods
 
-- `tool(name, def)` registers a tool
-- `group(prefix, callback)` registers prefixed tool groups
-- `use(plugin)` merges another `Redop` instance
-- `middleware(fn)` registers request-aware middleware
-- `onTransform(fn)` mutates raw params before parsing
-- `onBeforeHandle(fn)` observes the request before middleware/handler
-- `onAfterHandle(fn)` observes successful results after tool-local `after`
-- `onError(fn)` observes thrown errors
-- `mapResponse(fn)` maps successful results before transport output
-- `listen(opts)` starts the transport
+| Method | Purpose |
+| ------ | ------- |
+| `tool(name, def)` | Register an MCP tool. |
+| `resource(uri, def)` | Register a static or template resource. |
+| `prompt(name, def)` | Register an MCP prompt. |
+| `derive(fn)` | Add reusable request context before hooks and handlers run. |
+| `group(prefix, callback)` | Register namespaced tools, resources, and prompts under a shared prefix. |
+| `use(plugin)` | Merge another `Redop` instance as a plugin. |
+| `middleware(fn)` | Register global middleware. |
+| `onTransform(fn)` | Mutate raw params before schema parsing. |
+| `onParse(fn)` | Replace parsed input before before-hooks and middleware. |
+| `onBeforeHandle(fn)` | Observe each request before middleware and handlers. |
+| `onAfterHandle(fn)` | Observe successful results after tool-local `after` hooks. |
+| `onError(fn)` | Observe thrown errors from middleware or handlers. |
+| `notifyResourceChanged(uri)` | Push `resources/updated` notifications to subscribed clients. |
+| `listen()` / `listen(3000)` / `listen(opts)` | Start the HTTP or stdio transport. |
 
 ## Introspection
 
 - `toolNames` returns registered tool names
+- `resourceUris` returns registered resource URIs
+- `promptNames` returns registered prompt names
 - `getTool(name)` returns the resolved tool metadata
+- `getResource(uri)` returns the resolved resource metadata
+- `getPrompt(name)` returns the resolved prompt metadata
 - `serverInfo` returns the MCP server identity used during initialize
 
 ## See also
 
 - [Tool definition](/reference/tool-definition)
-- [Lifecycle reference](/reference/lifecycle)
+- [Listen options](/reference/listen-options)
+- [Request and context reference](/reference/request-context)

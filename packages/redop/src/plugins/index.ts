@@ -3,7 +3,7 @@
 // ─────────────────────────────────────────────
 
 import { middleware, Redop } from "../redop";
-import type { Context, ToolHandlerEvent } from "../types";
+import type { Context, ToolBeforeHookEvent, ToolHandlerEvent } from "../types";
 
 // ── logger() ──────────────────────────────────
 
@@ -55,7 +55,7 @@ export function logger(opts: LoggerOptions = {}): Redop {
         event: "tool.end",
         requestId: ctx.requestId,
         tool,
-        ...(ms != null ? { ms: +ms.toFixed(2) } : {}),
+        ...(ms == null ? {} : { ms: +ms.toFixed(2) }),
       });
     })
     .onError(({ tool, error, ctx }) => {
@@ -133,7 +133,7 @@ export function analytics(opts: AnalyticsOptions = {}): Redop {
     .onAfterHandle(({ tool, ctx }) => {
       const startedAt = ctx.startedAt as number | undefined;
       const durationMs =
-        startedAt != null ? +(performance.now() - startedAt).toFixed(2) : 0;
+        startedAt == null ? 0 : +(performance.now() - startedAt).toFixed(2);
       emit({
         durationMs,
         requestId: ctx.requestId,
@@ -149,17 +149,36 @@ export function analytics(opts: AnalyticsOptions = {}): Redop {
 
 interface HeaderAuthOptions {
   /** Context key to populate after successful validation. */
+  contextKey?: string;
+  /** Legacy alias for `contextKey`. */
   ctxKey?: string;
   /** Header to read from. Defaults vary by helper. */
   headerName?: string;
   /** Whether the header must be present. Default true for HTTP transport. */
   required?: boolean;
-  /** Static secret to validate against */
+  /** Static secret to validate against. */
   secret?: string;
-  /** Custom validate function — return true to allow */
+  /** Custom validate function — return true to allow. */
   validate?: (
     token: string,
-    event: ToolHandlerEvent<unknown, Context>
+    event: ToolBeforeHookEvent<unknown, Context>
+  ) => boolean | Promise<boolean>;
+}
+
+interface ApiKeyOptions extends Omit<HeaderAuthOptions, "validate"> {
+  /** Single allowed API key. Clearer alias for `secret`. */
+  key?: string;
+  /** Multiple allowed API keys. */
+  keys?: string[];
+  /** Legacy alias for `validateKey`. */
+  validate?: (
+    apiKey: string,
+    event: ToolBeforeHookEvent<unknown, Context>
+  ) => boolean | Promise<boolean>;
+  /** Clearer alias for `validate`. */
+  validateKey?: (
+    apiKey: string,
+    event: ToolBeforeHookEvent<unknown, Context>
   ) => boolean | Promise<boolean>;
 }
 
@@ -176,16 +195,22 @@ interface BearerOptions extends Omit<HeaderAuthOptions, "headerName"> {
  * @example
  * app.use(
  *   apiKey({
- *     secret: process.env.API_SECRET,
- *     ctxKey: "apiKey",
+ *     key: process.env.API_SECRET,
  *   })
  * );
  */
-export function apiKey(opts: HeaderAuthOptions = {}): Redop {
+export function apiKey(opts: ApiKeyOptions = {}): Redop {
+  const allowedKeys = opts.keys ? new Set(opts.keys) : null;
+
   return createHeaderAuthPlugin({
-    ...opts,
-    ctxKey: opts.ctxKey ?? "apiKey",
+    contextKey: opts.contextKey ?? opts.ctxKey ?? "apiKey",
     headerName: opts.headerName ?? "x-api-key",
+    required: opts.required,
+    secret: opts.key ?? opts.secret,
+    validate:
+      opts.validateKey ??
+      opts.validate ??
+      (allowedKeys ? (token) => allowedKeys.has(token) : undefined),
   });
 }
 
@@ -201,7 +226,7 @@ export function bearer(opts: BearerOptions = {}): Redop {
   return createHeaderAuthPlugin({
     ...opts,
     aliases: ["authToken"],
-    ctxKey: opts.ctxKey ?? "token",
+    contextKey: opts.contextKey ?? opts.ctxKey ?? "token",
     headerName: "authorization",
     transform(value) {
       const [providedScheme, ...rest] = value.trim().split(/\s+/);
@@ -229,12 +254,14 @@ function createHeaderAuthPlugin(
   }
 ): Redop {
   return middleware(async ({ ctx, request, input, tool, next }) => {
-    if (request.transport !== "http") {return next();}
+    if (request.transport !== "http") {
+      return next();
+    }
 
     const headerName = (opts.headerName ?? "authorization").toLowerCase();
     const headerValue = request.headers[headerName];
 
-    if (!opts.secret && !opts.validate) {
+    if (!(opts.secret || opts.validate)) {
       throw new Error(
         `[redop] ${headerName} auth requires either a secret or validate()`
       );
@@ -258,7 +285,8 @@ function createHeaderAuthPlugin(
       throw new Error(`Unauthorized: invalid ${headerName}`);
     }
 
-    (ctx as Record<string, unknown>)[opts.ctxKey ?? "auth"] = token;
+    const contextKey = opts.contextKey ?? opts.ctxKey ?? "auth";
+    (ctx as Record<string, unknown>)[contextKey] = token;
     for (const alias of opts.aliases ?? []) {
       (ctx as Record<string, unknown>)[alias] = token;
     }
@@ -279,18 +307,24 @@ interface RateLimitOptions {
 }
 
 function parseWindow(w: number | string): number {
-  if (typeof w === "number") {return w;}
+  if (typeof w === "number") {
+    return w;
+  }
   const match = w.match(/^(\d+)(ms|s|m|h|d)$/);
-  if (!match) {return 60_000;}
+  if (!match) {
+    return 60_000;
+  }
   const n = match[1];
   const unit = match[2];
-  if (!n || !unit) {return 60_000;}
+  if (!(n && unit)) {
+    return 60_000;
+  }
   const multipliers: Record<string, number> = {
     d: 86_400_000,
     h: 3_600_000,
     m: 60_000,
     ms: 1,
-    s: 1_000,
+    s: 1000,
   };
   return Number.parseInt(n) * (multipliers[unit] ?? 1);
 }
