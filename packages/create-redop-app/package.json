@@ -1,6 +1,6 @@
 {
   "name": "create-redop-app",
-  "version": "0.1.4",
+  "version": "0.1.5s",
   "description": "Scaffold a Bun-first Redop app",
   "keywords": [
     "bun",
