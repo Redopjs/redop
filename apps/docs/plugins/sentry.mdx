@@ -1,0 +1,121 @@
+---
+title: Sentry for Bun
+description: Learn how to set up Sentry in a Bun-hosted Redop server and capture your first errors.
+---
+
+Use Sentry when you want hosted error monitoring, traces, and logs for a Bun-hosted Redop server.
+
+This page follows the Bun setup model from Sentry and shows how to apply it to a Redop app.
+
+## Prerequisites
+
+You need:
+
+- a Sentry account and project
+- a Redop server running on Bun
+
+## Step 1: Install
+
+Add the Bun SDK to your project:
+
+```bash
+bun add @sentry/bun
+```
+
+## Step 2: Initialize Sentry early
+
+Initialize Sentry before you import the rest of your app. Create `instrument.ts` at the project root:
+
+```ts
+import * as Sentry from "@sentry/bun";
+
+Sentry.init({
+  dsn: process.env.SENTRY_DSN,
+  sendDefaultPii: true,
+  tracesSampleRate: 1.0,
+  enableLogs: true,
+});
+```
+
+## Step 3: Preload the instrumentation file
+
+Start Bun with `--preload` so Sentry initializes before your Redop server code runs.
+
+```bash
+bun --preload ./instrument.ts src/index.ts
+```
+
+## Step 4: Capture Redop errors with context
+
+Sentry can capture unhandled Bun errors automatically, but Redop also gives you a clean place to attach request metadata with `onError(...)`.
+
+```ts
+import * as Sentry from "@sentry/bun";
+import { Redop } from "@redopjs/redop";
+
+new Redop({
+  serverInfo: {
+    name: "sentry-demo",
+    version: "0.1.0",
+  },
+})
+  .onError(({ ctx, error, tool }) => {
+    Sentry.captureException(error, {
+      extra: {
+        requestId: ctx.requestId,
+        transport: ctx.transport,
+      },
+      tags: {
+        tool,
+      },
+    });
+  })
+  .tool("explode", {
+    handler: () => {
+      throw new Error("Boom");
+    },
+  });
+```
+
+## Step 5: Verify the setup
+
+Trigger a deliberate failure and confirm it appears in Sentry.
+
+```ts
+.tool("test.sentry", {
+  handler: () => {
+    throw new Error("Sentry test error");
+  },
+});
+```
+
+After you call the tool, check your Sentry project for:
+
+- the captured error in **Issues**
+- any traces in **Traces** if tracing is enabled
+- any structured log entries in **Logs** if logs are enabled
+
+## Add source maps
+
+If your production stack traces are minified, upload source maps:
+
+```bash
+npx @sentry/wizard@latest -i sourcemaps
+```
+
+## Bun limitation for bundled code
+
+Sentry's Bun auto-instrumentation depends on module loading hooks. If you bundle your app into a single file, use manual instrumentation instead of relying on the preload-based setup.
+
+## Next steps
+
+- tune `tracesSampleRate` for production traffic
+- add tags or extra context from `ctx.requestId`, tool names, tenant IDs, or auth metadata
+- upload source maps before production deploys
+- review Sentry's Bun docs for tracing, logs, and advanced configuration
+
+## See also
+
+- [Error handling](/documentation/error-handling)
+- [Request context](/reference/request-context)
+- [Build a plugin or middleware](/guides/build-plugin-or-middleware)

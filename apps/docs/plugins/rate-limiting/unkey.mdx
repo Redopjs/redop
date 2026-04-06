@@ -1,0 +1,133 @@
+---
+title: Unkey Ratelimit
+description: Protect a Redop server with Unkey's global rate-limiting SDK using namespaces, per-identifier limits, and 429 responses.
+---
+
+Use Unkey Ratelimit when you want a hosted global rate-limit service without provisioning Redis yourself.
+
+This guide adapts `@unkey/ratelimit` to a Redop server.
+
+## Install
+
+Add the Unkey package to your Redop app:
+
+```bash
+bun add @unkey/ratelimit
+```
+
+## Prerequisites
+
+You need:
+
+- an Unkey account
+- a root key with ratelimit permissions
+- `UNKEY_ROOT_KEY` in your environment
+
+## Create the limiter
+
+Create the limiter once at module scope and use a namespace that clearly matches the part of your app you are protecting.
+
+```ts
+import { Ratelimit } from "@unkey/ratelimit";
+
+const ratelimit = new Ratelimit({
+  rootKey: process.env.UNKEY_ROOT_KEY!,
+  namespace: "redop-api",
+  limit: 10,
+  duration: "60s",
+});
+```
+
+## Add it as Redop middleware
+
+```ts
+import { McpError, McpErrorCode, Redop } from "@redopjs/redop";
+
+new Redop({
+  serverInfo: {
+    name: "unkey-demo",
+    version: "0.1.0",
+  },
+})
+  .middleware(async ({ request, next }) => {
+    const identifier =
+      request.headers["x-user-id"] ??
+      request.headers["x-forwarded-for"] ??
+      request.ip ??
+      "anonymous";
+
+    const { limit, remaining, reset, success } =
+      await ratelimit.limit(identifier);
+
+    if (!success) {
+      throw new McpError(
+        McpErrorCode.InvalidRequest,
+        `Rate limit exceeded. Limit ${limit}, remaining ${remaining}, reset at ${new Date(
+          reset
+        ).toISOString()}.`
+      );
+    }
+
+    return next();
+  })
+  .tool("ping", {
+    handler: () => ({ ok: true }),
+  });
+```
+
+## Add timeout and fallback behavior
+
+Unkey's docs note that the SDK rejects by default if it does not get a response within 5 seconds. Configure `timeout` and `onError` if you want fail-open or custom handling.
+
+```ts
+const fallback = () => ({
+  success: true,
+  limit: 0,
+  remaining: 0,
+  reset: 0,
+});
+
+const ratelimit = new Ratelimit({
+  rootKey: process.env.UNKEY_ROOT_KEY!,
+  namespace: "redop-api",
+  limit: 10,
+  duration: "60s",
+  timeout: {
+    ms: 3000,
+    fallback,
+  },
+  onError: (_error, _identifier) => fallback(),
+});
+```
+
+## Use different namespaces for different surfaces
+
+Create separate limiters when different routes or tool families need different policies.
+
+```ts
+const authLimiter = new Ratelimit({
+  rootKey: process.env.UNKEY_ROOT_KEY!,
+  namespace: "auth-tools",
+  limit: 5,
+  duration: "60s",
+});
+
+const apiLimiter = new Ratelimit({
+  rootKey: process.env.UNKEY_ROOT_KEY!,
+  namespace: "api-tools",
+  limit: 100,
+  duration: "60s",
+});
+```
+
+Use the stricter limiter for login, token minting, or verification flows, and the broader limiter for normal API traffic.
+
+## When to choose Unkey
+
+Unkey is a strong fit when you want global hosted rate limiting with simple namespaces and per-identifier checks, especially if you already use Unkey for API auth or key management.
+
+## See also
+
+- [Build a plugin or middleware](/guides/build-plugin-or-middleware)
+- [Add request context](/guides/add-request-context)
+- [Error handling](/documentation/error-handling)

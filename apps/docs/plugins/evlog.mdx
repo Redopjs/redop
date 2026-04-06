@@ -1,0 +1,176 @@
+---
+title: Evlog
+description: Use @redopjs/evlog to emit one wide event per Redop tool, resource, or prompt.
+---
+
+Use `@redopjs/evlog` when you want request-scoped wide events for Redop servers without wiring your own logging lifecycle.
+
+The plugin creates one evlog event per executed tool, resource, or prompt. It gives you:
+
+- `ctx.evlog` inside handlers
+- `useLogger()` from anywhere in the same request call stack
+- drain adapters, enrichers, and tail sampling from evlog
+- metadata for Redop operation kind, name, transport, request ID, and duration
+
+## Install
+
+```bash
+bun add @redopjs/evlog evlog
+```
+
+## Step 1: Initialize evlog
+
+Initialize evlog at startup so the logger has your service metadata.
+
+```ts
+import { initLogger } from "evlog";
+
+initLogger({
+  env: {
+    service: "my-redop-server",
+    environment: process.env.NODE_ENV ?? "development",
+  },
+});
+```
+
+## Step 2: Register the plugin
+
+Attach the plugin with `.use(...)` before the handlers that will use `ctx.evlog` or `useLogger()`.
+
+```ts
+import { Redop } from "@redopjs/redop";
+import { evlog } from "@redopjs/evlog";
+
+new Redop({
+  serverInfo: {
+    name: "docs-server",
+    version: "0.1.0",
+  },
+})
+  .use(evlog())
+  .tool("search_docs", {
+    handler: ({ ctx, input }) => {
+      ctx.evlog.set({
+        search: {
+          query: input.query,
+        },
+      });
+
+      return {
+        ok: true,
+      };
+    },
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string" },
+      },
+      required: ["query"],
+    },
+  });
+```
+
+## Step 3: Add request-scoped context
+
+Use `ctx.evlog.set(...)` to build up a wide event through your handler flow.
+
+```ts
+.tool("orders.get", {
+  handler: async ({ ctx, input }) => {
+    ctx.evlog.set({
+      order: { id: input.id },
+    });
+
+    const order = await loadOrder(input.id);
+
+    ctx.evlog.set({
+      order: {
+        id: order.id,
+        total: order.total,
+        status: order.status,
+      },
+    });
+
+    return order;
+  },
+})
+```
+
+## Use `useLogger()` from helpers
+
+Use `useLogger()` when you want to add log context from helper functions or service modules without threading `ctx` through every call.
+
+```ts
+import { useLogger } from "@redopjs/evlog";
+
+export async function loadWorkspace(id: string) {
+  const log = useLogger();
+
+  log.set({
+    workspace: { id },
+  });
+
+  return db.workspaces.findById(id);
+}
+```
+
+## Configure drain, enrich, and keep
+
+`@redopjs/evlog` accepts the same middleware-style options as evlog integrations such as `drain`, `enrich`, `keep`, `include`, `exclude`, and `routes`.
+
+```ts
+import { createAxiomDrain } from "evlog/axiom";
+import { evlog } from "@redopjs/evlog";
+
+app.use(
+  evlog({
+    drain: createAxiomDrain(),
+    enrich: (ctx) => {
+      ctx.event.region = process.env.FLY_REGION;
+    },
+    keep: (ctx) => {
+      if (ctx.duration && ctx.duration > 1000) {
+        ctx.shouldKeep = true;
+      }
+    },
+  }),
+);
+```
+
+## Add Redop-specific enrichment
+
+Use `operationEnrich(...)` when you want derived fields based on Redop operation metadata.
+
+```ts
+app.use(
+  evlog({
+    operationEnrich: ({ durationMs, kind, name, success }) => ({
+      observedOperation: `${kind}:${name}`,
+      performanceBucket: durationMs > 500 ? "slow" : "normal",
+      success,
+    }),
+  }),
+);
+```
+
+## What gets logged by default
+
+The plugin logs metadata only by default. It does not log raw tool input, prompt content, resource bodies, or handler results unless your own code adds them.
+
+Default fields include:
+
+- `kind`
+- `name`
+- `mcpMethod`
+- `transport`
+- `requestId`
+- `sessionId`
+- `durationMs`
+- `success`
+- HTTP method and URL when available
+
+## See also
+
+- [Use built-in plugins](/guides/use-built-in-plugins)
+- [Build a plugin or middleware](/guides/build-plugin-or-middleware)
+- [Built-in plugins reference](/reference/built-in-plugins)

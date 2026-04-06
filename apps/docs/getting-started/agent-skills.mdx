@@ -1,0 +1,200 @@
+---
+title: Agent Skills
+description: Install the Redop Agent Skill so AI assistants can explain Redop, help design servers, and guide implementation with the framework's concepts and patterns.
+---
+
+# Agent Skills
+
+> AI-ready Redop knowledge for assistants that need to explain, design, debug, and build MCP servers with Redop.
+
+Redop includes an installable Agent Skill that teaches compatible AI assistants how Redop works. It packages framework knowledge, design guidance, example patterns, and practical prompts so the assistant can help with Redop tasks without depending on a local Redop checkout.
+
+## What are Agent Skills?
+
+[Agent Skills](https://agentskills.io/) is an open specification for packaging AI assistant capabilities. Skills can ship:
+
+- **Framework knowledge**: core Redop concepts, lifecycle, transports, and composition patterns
+- **Design guidance**: when to use tools, resources, prompts, middleware, hooks, modules, and plugins
+- **Implementation help**: examples and prompts for building or debugging a Redop server
+
+## Available Skill
+
+<table>
+<thead>
+  <tr>
+    <th>Skill</th>
+    <th>Description</th>
+  </tr>
+</thead>
+<tbody>
+  <tr>
+    <td><code>skills/redop</code></td>
+    <td>Portable Redop framework knowledge for understanding, building, debugging, and extending Bun-first TypeScript MCP servers.</td>
+  </tr>
+</tbody>
+</table>
+
+## Installing the Skill
+
+Compatible agents can discover and use skills automatically.
+
+To install the Redop skill with the skills CLI:
+
+```bash [Terminal]
+bunx skills add redopjs/skills
+```
+
+## What the Skill Does
+
+### Framework Explanation
+
+The skill teaches assistants:
+
+- what Redop is and when it is a good fit
+- the Redop mental model and explicit composition style
+- how tools, resources, and prompts differ
+- how the request lifecycle works from `derive` through `afterResponse`
+
+### Design Guidance
+
+The skill helps assistants answer questions such as:
+
+- when to model something as a tool vs a resource vs a prompt
+- when to use middleware vs hooks
+- when to use `.use(...)` with feature modules vs extracting a plugin
+- when to scaffold with `create-redop-app` vs install `@redopjs/redop` directly
+
+### Build and Debug Help
+
+The skill includes guidance for:
+
+- building a first Redop server
+- adding typed input with Zod and other supported schema styles
+- choosing HTTP vs stdio transport
+- understanding plugin-based typed request context
+- debugging transport, lifecycle, and error-handling questions
+
+## Example Prompts
+
+Ask your AI assistant:
+
+<code-collapse>
+
+```txt [Prompt]
+Use $redop to explain when something should be a tool, a resource, or a prompt.
+```
+
+</code-collapse>
+
+<code-collapse>
+
+```txt [Prompt]
+Use $redop to help me build a Redop server with Zod input and HTTP transport.
+```
+
+</code-collapse>
+
+<code-collapse>
+
+```txt [Prompt]
+Use $redop to explain Redop's request lifecycle and where middleware vs hooks fit.
+```
+
+</code-collapse>
+
+<code-collapse>
+
+```txt [Prompt]
+Use $redop to explain how Redop plugins add typed request context.
+```
+
+</code-collapse>
+
+<code-collapse>
+
+```txt [Prompt]
+Use $redop to explain when I should scaffold with create-redop-app instead of installing @redopjs/redop directly.
+```
+
+</code-collapse>
+
+## Skill Structure
+
+```text
+skills/
+└── redop/
+    ├── SKILL.md
+    ├── agents/
+    │   └── openai.yaml
+    └── references/
+        ├── foundations.md
+        ├── surfaces.md
+        ├── runtime.md
+        ├── composition.md
+        ├── transports.md
+        ├── scaffolding.md
+        └── examples.md
+```
+
+## Reference Documents
+
+The Redop skill ships with focused references:
+
+### foundations.md
+
+- what Redop is
+- the core mental model
+- when to choose Redop
+- constructor and request-context basics
+
+### surfaces.md
+
+- tool, resource, and prompt design
+- schema usage
+- annotations
+- handler contracts
+
+### runtime.md
+
+- request execution order
+- middleware and hooks
+- error behavior
+- after-response work
+
+### composition.md
+
+- feature modules
+- plugins
+- typed context propagation
+- built-in auth and logging helpers
+
+### transports.md
+
+- `listen()` shapes
+- HTTP vs stdio
+- `/mcp`
+- session behavior and transport caveats
+
+### scaffolding.md
+
+- `create-redop-app`
+- install-vs-scaffold decisions
+- starter defaults
+- transport, schema, and deploy choices
+
+### examples.md
+
+- portable example patterns
+- optional deep-dive pointers when a Redop checkout is available
+
+## Next Steps
+
+- [Installation](/getting-started/installation)
+- [Create a Project with create-redop-app](/getting-started/create-redop-app)
+- [Your First Server](/getting-started/first-server)
+- [Tools](/documentation/tools)
+- [Plugins](/documentation/plugins)
+
+---
+
+- [Agent Skills Spec](https://agentskills.io/)

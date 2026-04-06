@@ -1,0 +1,140 @@
+---
+title: PostHog Error Capturing
+description: Capture Redop server errors in PostHog with posthog-node, exception autocapture, and manual error reporting.
+---
+
+Use PostHog error capturing when you want exceptions, stack traces, and backend events inside the same PostHog workspace you already use for product analytics.
+
+This guide adapts PostHog's official Node.js error tracking setup to a Bun-hosted Redop server.
+
+## Install
+
+Add the PostHog Node SDK to your app:
+
+```bash
+bun add posthog-node
+```
+
+## Prerequisites
+
+You need:
+
+- a PostHog project token
+- your PostHog host, such as `https://us.i.posthog.com`
+- a Redop server running on Bun
+
+## Step 1: Create the client
+
+Create the PostHog client once at module scope.
+
+```ts
+import { PostHog } from "posthog-node";
+
+const posthog = new PostHog(process.env.POSTHOG_PROJECT_TOKEN!, {
+  host: process.env.POSTHOG_HOST ?? "https://us.i.posthog.com",
+});
+```
+
+## Step 2: Enable exception autocapture
+
+PostHog's Node.js error tracking docs support exception autocapture for uncaught exceptions and unhandled rejections.
+
+```ts
+import { PostHog } from "posthog-node";
+
+const posthog = new PostHog(process.env.POSTHOG_PROJECT_TOKEN!, {
+  host: process.env.POSTHOG_HOST ?? "https://us.i.posthog.com",
+  enableExceptionAutocapture: true,
+});
+```
+
+Use this when you want a safety net for failures that escape your own request handling.
+
+## Step 3: Capture Redop errors explicitly
+
+Redop gives you a better place to attach request metadata with `onError(...)`. Manual capture is useful when you want tool names, transport, or request IDs included with the exception.
+
+```ts
+import { PostHog } from "posthog-node";
+import { Redop } from "@redopjs/redop";
+
+const posthog = new PostHog(process.env.POSTHOG_PROJECT_TOKEN!, {
+  host: process.env.POSTHOG_HOST ?? "https://us.i.posthog.com",
+});
+
+new Redop({
+  serverInfo: {
+    name: "posthog-demo",
+    version: "0.1.0",
+  },
+})
+  .onError(({ ctx, error, tool }) => {
+    posthog.captureException(
+      error instanceof Error ? error : new Error(String(error)),
+      ctx.requestId,
+      {
+        tool,
+        transport: ctx.transport,
+      }
+    );
+  })
+  .tool("explode", {
+    handler: () => {
+      throw new Error("PostHog test error");
+    },
+  });
+```
+
+## Step 4: Use stable identifiers
+
+PostHog's Node docs emphasize that backend events need a stable `distinctId`. For Redop, avoid random IDs when you want server-side errors to connect to frontend activity or user history.
+
+Good identifiers include:
+
+- authenticated user ID
+- tenant ID
+- API key owner ID
+- an internal actor or account ID
+
+Use `ctx.requestId` only for request correlation when you do not have a better user or tenant identity.
+
+## Step 5: Flush on shutdown
+
+The Node SDK batches events in the background. Flush before shutdown so pending exceptions are not lost.
+
+```ts
+process.on("SIGTERM", async () => {
+  await posthog.shutdown();
+  process.exit(0);
+});
+```
+
+For short-lived runtimes, PostHog recommends more aggressive flushing and calling `shutdown()` before exit.
+
+## Step 6: Verify error capture
+
+Trigger a test failure:
+
+```ts
+.tool("test.posthog", {
+  handler: () => {
+    throw new Error("PostHog verification error");
+  },
+});
+```
+
+Then confirm the exception appears in PostHog's activity feed or error tracking views.
+
+## Source maps
+
+PostHog's error tracking docs recommend uploading source maps if you want accurate production stack traces for minified builds.
+
+## When to choose PostHog
+
+Choose PostHog when you already use it for product analytics, feature flags, or session replay and want backend error capture in the same system.
+
+## See also
+
+- [Sentry for Bun](/plugins/sentry)
+- [Error handling](/documentation/error-handling)
+- [Request context](/reference/request-context)

@@ -13,7 +13,7 @@
   "favicon": "/favicon.ico",
   "seo": {
     "metatags": {
-      "canonical": "https://useagents.site/docs"
+      "canonical": "https://redop.useagents.site/docs"
     }
   },
   "background": {
@@ -50,6 +50,7 @@
               "index",
               "getting-started/installation",
               "getting-started/create-redop-app",
+              "getting-started/agent-skills",
               "getting-started/first-server",
               "getting-started/connect-http",
               "getting-started/connect-stdio",
@@ -74,6 +75,34 @@
                   "documentation/on-before-handle",
                   "documentation/on-after-handle",
                   "documentation/on-after-response"
+                ]
+              }
+            ]
+          },
+          {
+            "icon": "plug",
+            "group": "Plugins",
+            "pages": [
+              "guides/use-built-in-plugins",
+              "guides/logger-plugin",
+              "plugins/evlog",
+              {
+                "group": "Authentication",
+                "pages": [
+                  "guides/authentication/api-key",
+                  "guides/authentication/jwt",
+                  "guides/authentication/oauth"
+                ]
+              },
+              {
+                "group": "Error Capturing",
+                "pages": ["plugins/sentry", "plugins/error-capturing/posthog"]
+              },
+              {
+                "group": "Rate Limiting",
+                "pages": [
+                  "plugins/rate-limiting/upstash",
+                  "plugins/rate-limiting/unkey"
                 ]
               }
             ]
@@ -118,16 +147,6 @@
               "guides/register-resources",
               "guides/register-prompts",
               "guides/notify-resource-changes",
-              {
-                "icon": "shield-check",
-                "group": "Authentication",
-                "pages": [
-                  "guides/authentication/api-key",
-                  "guides/authentication/jwt",
-                  "guides/authentication/oauth"
-                ]
-              },
-              "guides/logger-plugin",
               "guides/build-plugin-or-middleware",
               "guides/build-plugins",
               "guides/debug-http",
@@ -177,7 +196,7 @@
       },
       {
         "icon": "cloud",
-        "tab": "Deploy",
+        "tab": "Deploy to Production",
         "groups": [
           {
             "icon": "server",

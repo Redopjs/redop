@@ -1,0 +1,4 @@
+interface:
+  display_name: "Redop"
+  short_description: "Navigate the Redop monorepo"
+  default_prompt: "Use $redop to inspect the Redop monorepo, trace framework behavior, and plan code or docs changes."
