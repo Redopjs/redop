@@ -9,7 +9,6 @@ import {
   Copy,
   Shield,
 } from "lucide-react";
-import { motion } from "motion/react";
 import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
@@ -20,90 +19,25 @@ import { Button } from "@/components/ui/button";
 const exampleCode = `import { Redop } from "@redopjs/redop";
 import { z } from "zod";
 
-const app = new Redop<{ startedAt?: number }>({
+new Redop({
   serverInfo: {
-    name: "content-hub",
-    title: "Content Hub",
-    version: "1.0.0",
-    description: "Expose docs tools, resources, and prompts.",
-  },
-  capabilities: {
-    tools: true,
-    resources: true,
-    prompts: true,
+    name: "docs-server",
+    title: "Docs Server",
+    version: "0.1.0",
+    description: "Search docs and return answers.",
   },
 })
-  .onBeforeHandle(({ ctx, tool }) => {
-    ctx.startedAt = performance.now();
-    console.log("start", tool);
-  })
-  .onAfterHandle(({ ctx, result, tool }) => {
-    const startedAt = ctx.startedAt;
-    const ms =
-      startedAt == null ? 0 : +(performance.now() - startedAt).toFixed(2);
-
-    console.log("done", { tool, ms });
-    return result;
-  })
-  .onError(({ ctx, error, tool }) => {
-    console.error("failed", {
-      tool,
-      requestId: ctx.requestId,
-      message: error instanceof Error ? error.message : String(error),
-    });
-  })
-  .onAfterResponse(({ ctx, error, kind, name }) => {
-    console.log("afterResponse", {
-      kind,
-      name,
-      requestId: ctx.requestId,
-      ok: !error,
-    });
-  })
   .tool("search_docs", {
-    description: "Search docs by keyword",
+    description: "Search internal docs",
     inputSchema: z.object({
       query: z.string().min(1),
-      limit: z.number().int().min(1).max(10).default(5),
     }),
     handler: ({ input }) => ({
       query: input.query,
       results: [],
-      total: 0,
     }),
   })
-  .resource("docs://guides/getting-started", {
-    name: "Getting started guide",
-    mimeType: "text/markdown",
-    handler: () => ({
-      type: "text",
-      text: "# Getting started\\n\\nInstall Redop and add your first tool.",
-    }),
-  })
-  .prompt("rewrite_docs", {
-    description: "Rewrite docs in a concise style",
-    arguments: [
-      { name: "draft", required: true },
-      { name: "audience" },
-    ],
-    handler: ({ arguments: args }) => ({
-      description: "Rewrite technical docs for a target audience",
-      messages: [
-        {
-          role: "user",
-          content: {
-            type: "text",
-            text: \`Rewrite this for \${args?.audience ?? "developers"}:\\n\\n\${args?.draft ?? ""}\`,
-          },
-        },
-      ],
-    }),
-  });
-
-app.listen({
-  port: 3000,
-  cors: true,
-});`;
+  .listen(3000);`;
 
 export default function Home() {
   const [copied, setCopied] = useState(false);
@@ -120,9 +54,9 @@ export default function Home() {
     <div className="relative flex min-h-screen flex-col overflow-hidden">
       {/* Navbar */}
       <header className="sticky top-0 z-50 w-full border-redop-border border-b bg-redop-warm/90 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-380 items-center justify-between px-8 py-4">
-          <Icons.Logo className="w-20" />
-          <nav className="flex items-center gap-6 font-mono text-base text-redop-ink/70 uppercase tracking-wider">
+        <div className="mx-auto flex w-full max-w-[95rem] items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
+          <Icons.Logo className="w-16 sm:w-20" />
+          <nav className="flex items-center gap-4 font-mono text-xs text-redop-ink/70 uppercase tracking-wider sm:gap-6 sm:text-sm">
             <Link
               className="transition-colors hover:text-redop-primary"
               href="/docs"
@@ -140,39 +74,26 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="relative z-10 mx-auto flex w-full max-w-[95rem] flex-1 flex-col px-8">
+      <main className="relative z-10 mx-auto flex w-full max-w-[95rem] flex-1 flex-col px-4 sm:px-6 lg:px-8">
         {/* Hero Section */}
-        <section className="grid items-center gap-16 pb-20 md:pt-20 md:pb-28 lg:grid-cols-2">
+        <section className="grid items-center gap-10 py-10 sm:gap-12 sm:py-14 md:gap-16 md:py-20 lg:grid-cols-2 lg:py-24">
           <div>
-            <motion.h1
-              animate={{ opacity: 1, y: 0 }}
-              className="mb-8 font-normal text-5xl text-redop-ink leading-[1.1] tracking-tight md:text-5xl"
-              initial={{ opacity: 0, y: 20 }}
-              transition={{ delay: 0.1, duration: 0.5 }}
-            >
+            <h1 className="mb-6 font-normal text-4xl text-redop-ink leading-[1.1] tracking-tight sm:mb-8 sm:text-5xl">
               Bun-native framework for building{" "}
               <span className="text-redop-primary">production MCP servers.</span>
-            </motion.h1>
+            </h1>
 
-            <motion.p
-              animate={{ opacity: 1, y: 0 }}
-              className="mb-10 max-w-2xl text-lg text-muted-foreground leading-relaxed md:text-xl"
-              initial={{ opacity: 0, y: 20 }}
-              transition={{ delay: 0.2, duration: 0.5 }}
-            >
-              Define tools, validate input, compose middleware, and add plugins.
-              Add resources, prompts, and lifecycle hooks with strong TypeScript
-              inference from Zod, then run natively on Bun.
-            </motion.p>
+            <p className="mb-8 max-w-2xl text-base text-muted-foreground leading-relaxed sm:mb-10 sm:text-lg md:text-xl">
+              Define tools, validate input, compose middleware, and ship MCP
+              servers with a small explicit API. Start with one tool, then add
+              resources, prompts, hooks, and plugins when you need them.
+            </p>
 
-            <motion.div
-              animate={{ opacity: 1, y: 0 }}
-              className="flex flex-col gap-10"
-              initial={{ opacity: 0, y: 20 }}
-              transition={{ delay: 0.3, duration: 0.5 }}
-            >
-              <div className="flex max-w-md items-center justify-between rounded-lg border border-redop-ink/20 border-dashed bg-transparent px-5 py-3 font-mono text-redop-ink text-sm">
-                <span>{command}</span>
+            <div className="flex flex-col gap-8 sm:gap-10">
+              <div className="flex w-full max-w-md items-center justify-between gap-3 rounded-lg border border-redop-ink/20 border-dashed bg-transparent px-4 py-3 font-mono text-redop-ink text-xs sm:px-5 sm:text-sm">
+                <span className="min-w-0 break-all sm:break-normal">
+                  {command}
+                </span>
                 <Button onClick={handleCopy} size={"icon"} variant={"ghost"}>
                   {copied ? (
                     <Check className="h-4 w-4" />
@@ -183,7 +104,7 @@ export default function Home() {
               </div>
 
               <div className="flex flex-col gap-4">
-                <span className="font-mono text-redop-ink/50 text-sm">
+                <span className="font-mono text-redop-ink/50 text-xs sm:text-sm">
                   Used by
                 </span>
                 <Link href="https://useagents.site">
@@ -196,15 +117,10 @@ export default function Home() {
                   />
                 </Link>
               </div>
-            </motion.div>
+            </div>
           </div>
 
-          <motion.div
-            animate={{ opacity: 1, y: 0 }}
-            className="group relative"
-            initial={{ opacity: 0, y: 20 }}
-            transition={{ delay: 0.4, duration: 0.5 }}
-          >
+          <div className="group relative min-w-0">
             <div className="absolute -inset-1 rounded-xl bg-gradient-to-r from-redop-primary/20 to-redop-accent/20 opacity-50 blur transition duration-1000 group-hover:opacity-100 group-hover:duration-200" />
             <div className="relative overflow-hidden rounded-xl border border-redop-border bg-redop-panel shadow-sm">
               <div className="flex items-center border-redop-border border-b bg-redop-warm/50 px-4 py-3">
@@ -217,22 +133,17 @@ export default function Home() {
                   server.ts
                 </div>
               </div>
-              <div className="overflow-x-auto p-6">
-                <pre className="font-mono text-redop-ink text-sm leading-relaxed">
+              <div className="overflow-x-auto p-4 sm:p-6">
+                <pre className="font-mono text-redop-ink text-xs leading-relaxed sm:text-sm">
                   <code>{exampleCode}</code>
                 </pre>
               </div>
             </div>
-          </motion.div>
+          </div>
         </section>
 
         {/* Proof Strip */}
-        <motion.section
-          animate={{ opacity: 1 }}
-          className="flex flex-wrap items-center gap-x-8 gap-y-4 border-t py-8 font-mono text-muted-foreground text-sm uppercase tracking-wider"
-          initial={{ opacity: 0 }}
-          transition={{ delay: 0.5, duration: 0.7 }}
-        >
+        <section className="flex flex-wrap items-center gap-x-6 gap-y-3 border-t py-6 font-mono text-muted-foreground text-xs uppercase tracking-wider sm:gap-x-8 sm:gap-y-4 sm:py-8 sm:text-sm">
           <div className="flex items-center gap-2">
             <CheckCircle2 className="h-4 w-4 text-redop-primary/60" /> Typed
             tools
@@ -253,15 +164,15 @@ export default function Home() {
             <CheckCircle2 className="h-4 w-4 text-redop-primary/60" />{" "}
             Bun-native
           </div>
-        </motion.section>
+        </section>
 
         {/* Features Section */}
-        <section className="border-redop-border border-t py-24">
-          <div className="mb-16">
-            <h2 className="mb-4 font-normal text-4xl tracking-tight">
+        <section className="border-redop-border border-t py-16 sm:py-20 lg:py-24">
+          <div className="mb-10 sm:mb-16">
+            <h2 className="mb-4 font-normal text-3xl tracking-tight sm:text-4xl">
               Everything you need.
             </h2>
-            <p className="max-w-2xl text-lg text-redop-ink/70">
+            <p className="max-w-2xl text-base text-redop-ink/70 sm:text-lg">
               Built-in primitives for the real world. Stop writing the same
               validation and transport layers.
             </p>
@@ -307,14 +218,14 @@ export default function Home() {
         </section>
 
         {/* Philosophy Section */}
-        <section className="border-redop-border border-t py-24">
+        <section className="border-redop-border border-t py-16 sm:py-20 lg:py-24">
           <div className="mx-auto max-w-3xl text-center">
-            <h2 className="mb-6 font-normal text-3xl tracking-tight">
+            <h2 className="mb-6 font-normal text-2xl tracking-tight sm:text-3xl">
               Philosophy
             </h2>
-            <div className="mt-12 grid gap-8 text-left sm:grid-cols-3">
+            <div className="mt-10 grid gap-8 text-left sm:mt-12 sm:grid-cols-3">
               <div>
-                <div className="mb-2 font-mono text-redop-primary">
+                <div className="mb-2 font-mono text-redop-primary text-sm">
                   01. Small API
                 </div>
                 <h3 className="mb-2 font-normal">Minimal surface</h3>
@@ -350,9 +261,9 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="z-10 mt-auto w-full border-redop-border border-t bg-redop-panel py-8">
-        <div className="mx-auto flex max-w-390 flex-col items-center justify-between gap-6 px-6 md:flex-row">
-          <Icons.Logo className="w-20" />
-          <div className="font-mono text-lg text-muted-foreground uppercase">
+        <div className="mx-auto flex w-full max-w-[95rem] flex-col items-center justify-between gap-4 px-4 text-center sm:px-6 md:flex-row md:text-left lg:px-8">
+          <Icons.Logo className="w-16 sm:w-20" />
+          <div className="font-mono text-sm text-muted-foreground uppercase sm:text-base md:text-lg">
             © 2026 UseAgents. MIT Licensed.
           </div>
         </div>
