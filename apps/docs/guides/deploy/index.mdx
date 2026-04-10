@@ -12,6 +12,7 @@ Redop HTTP is a long-running Bun server. That means the best production fit toda
 | Railway | Fastest hosted setup | `http` | `railway` | Recommended |
 | Fly.io | Always-on Docker deployment | `http` | `fly-io` | Recommended |
 | Docker | Self-hosting or custom infra | `http` | `fly-io` gives you a starting Dockerfile | Recommended |
+| Unkey | Docker deployment with preview environments, rollbacks, and Sentinel | `http` | none | Private beta |
 | Vercel | Custom constrained setups | not recommended for the built-in HTTP transport | `vercel` | Caveat only |
 
 ## Redop hosting model
@@ -44,4 +45,5 @@ If you keep testing manually after `initialize`, copy the `Mcp-Session-Id` respo
 - Choose [Deploy to Railway](/guides/deploy/railway) if you want the shortest path to a hosted Bun service.
 - Choose [Deploy to Fly.io](/guides/deploy/fly-io) if you want Docker-based deployment with an always-on app shape.
 - Choose [Deploy with Docker](/guides/deploy/docker) if you want to run Redop on your own infra or in a monorepo.
+- Choose [Deploy to Unkey](/guides/deploy/unkey) if you already have Unkey Deploy beta access and want Docker-based deploys with preview environments and built-in edge controls.
 - Read [Deploy to Vercel](/guides/deploy/vercel) only if you specifically need Vercel and understand the built-in transport caveat.
