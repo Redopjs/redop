@@ -123,8 +123,9 @@ export function startHttpTransport(
     },
   });
 
-  const listenUrl = `http${opts.tls ? "s" : ""}://${hostname}:${port}${mcpPath}`;
-  opts.onListen?.({ hostname, port, url: listenUrl });
+  const boundPort = server.port ?? port;
+  const listenUrl = `http${opts.tls ? "s" : ""}://${hostname}:${boundPort}${mcpPath}`;
+  opts.onListen?.({ hostname, port: boundPort, url: listenUrl });
 
   return {
     push(sessionId, payload, options) {
