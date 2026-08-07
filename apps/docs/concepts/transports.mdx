@@ -20,7 +20,8 @@ Redop currently supports two transports:
 The HTTP transport gives you:
 
 - a network endpoint at `/mcp`
-- session-aware client communication
+- **MCP `2026-07-28`**: stateless requests (no session), `server/discover`, `Mcp-Method` / `Mcp-Name` routing headers, list cache hints, MRTR `input_required`, and `subscriptions/listen`
+- **legacy versions**: session-aware client communication with `Mcp-Session-Id` and Inspector-style `GET` SSE
 - an optional health endpoint when enabled
 - transport debug logs with `debug: true`
 
@@ -31,7 +32,8 @@ The stdio transport gives you:
 - a local command-based integration path
 - no network port
 - one strict rule: keep stdout clean for MCP messages
+- the same protocol versions as HTTP, including `server/discover` and MRTR on `2026-07-28`
 
 ## Compatibility notes
 
-The current HTTP transport negotiates multiple MCP protocol versions and keeps compatibility behavior for local tooling, including Inspector-style workflows.
+The HTTP transport negotiates multiple MCP protocol versions. Prefer `2026-07-28` for scalable, load-balanced deployments. Older clients that speak `initialize` + sessions continue to work.

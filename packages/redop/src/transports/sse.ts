@@ -4,6 +4,17 @@
 
 const enc = new TextEncoder();
 
+export type SubscriptionFilter = {
+  promptsListChanged?: boolean;
+  resourcesListChanged?: boolean;
+  toolsListChanged?: boolean;
+};
+
+type StreamEntry = {
+  ctrl: ReadableStreamDefaultController<Uint8Array>;
+  filter?: SubscriptionFilter;
+};
+
 export function encodeSse(
   data: unknown,
   init: {
@@ -31,25 +42,59 @@ export function encodeSse(
   return enc.encode(`${lines.join("\n")}\n\n`);
 }
 
+function notificationMatchesFilter(
+  payload: unknown,
+  filter: SubscriptionFilter | undefined
+): boolean {
+  if (!filter) {
+    // Legacy session streams (no filter) receive everything.
+    return true;
+  }
+  const method =
+    payload &&
+    typeof payload === "object" &&
+    "method" in payload &&
+    typeof (payload as { method?: unknown }).method === "string"
+      ? (payload as { method: string }).method
+      : undefined;
+
+  if (!method) {
+    return true;
+  }
+
+  if (method === "notifications/tools/list_changed") {
+    return Boolean(filter.toolsListChanged);
+  }
+  if (method === "notifications/prompts/list_changed") {
+    return Boolean(filter.promptsListChanged);
+  }
+  if (method === "notifications/resources/list_changed") {
+    return Boolean(filter.resourcesListChanged);
+  }
+  // Resource updated and progress always allowed when subscribed via URI map.
+  return true;
+}
+
 export class SseHub {
-  // sessionId -> Set of active stream controllers (concurrent streams per spec)
-  private streams = new Map<
-    string,
-    Set<ReadableStreamDefaultController<Uint8Array>>
-  >();
+  // streamKey (sessionId or subscriptionId) -> active stream controllers
+  private streams = new Map<string, Set<StreamEntry>>();
   private heartbeats = new Map<string, ReturnType<typeof setInterval>>();
 
   public open(
     sessionId: string,
-    _lastEventId: string | null
+    _lastEventId: string | null,
+    options?: {
+      filter?: SubscriptionFilter;
+      onOpen?: (ctrl: ReadableStreamDefaultController<Uint8Array>) => void;
+    }
   ): { stream: ReadableStream<Uint8Array> } {
     // Capture ctrl outside the ReadableStream constructor so cancel() can reference it.
     // start() fires synchronously before open() returns, so this is always assigned.
-    let ctrl!: ReadableStreamDefaultController<Uint8Array>;
+    let entry!: StreamEntry;
 
     const stream = new ReadableStream<Uint8Array>({
       start: (c) => {
-        ctrl = c;
+        entry = { ctrl: c, filter: options?.filter };
 
         let sessionStreams = this.streams.get(sessionId);
         if (!sessionStreams) {
@@ -64,7 +109,7 @@ export class SseHub {
             }
             for (const sc of streams) {
               try {
-                sc.enqueue(enc.encode(": keep-alive\n\n"));
+                sc.ctrl.enqueue(enc.encode(": keep-alive\n\n"));
               } catch {
                 // Dead controller — will be pruned on next send() or cancel()
               }
@@ -73,12 +118,13 @@ export class SseHub {
           this.heartbeats.set(sessionId, timer);
         }
 
-        sessionStreams.add(ctrl);
+        sessionStreams.add(entry);
 
         // 2025-11-25 spec: priming comment + retry hint.
         // A SSE comment (: …) keeps proxies alive without firing a client
         // `message` event. We also advertise a retry backoff here.
-        ctrl.enqueue(encodeSse("", { id: crypto.randomUUID(), retry: 5000 }));
+        c.enqueue(encodeSse("", { id: crypto.randomUUID(), retry: 5000 }));
+        options?.onOpen?.(c);
       },
 
       cancel: () => {
@@ -87,7 +133,7 @@ export class SseHub {
           return;
         }
 
-        sessionStreams.delete(ctrl);
+        sessionStreams.delete(entry);
 
         if (sessionStreams.size === 0) {
           this.streams.delete(sessionId);
@@ -126,8 +172,11 @@ export class SseHub {
     });
 
     for (const sc of sessionStreams) {
+      if (!notificationMatchesFilter(payload, sc.filter)) {
+        continue;
+      }
       try {
-        sc.enqueue(chunk);
+        sc.ctrl.enqueue(chunk);
         return true;
       } catch {
         // Controller is closed/errored — prune and try the next one.
@@ -136,6 +185,19 @@ export class SseHub {
     }
 
     return false;
+  }
+
+  /**
+   * Fan out a notification to every open stream whose subscription filter
+   * accepts it. Used for 2026-07-28 `subscriptions/listen` streams.
+   */
+  public broadcastFiltered(
+    payload: unknown,
+    options?: { event?: string; id?: string }
+  ): void {
+    for (const sid of [...this.streams.keys()]) {
+      this.send(sid, payload, options);
+    }
   }
 
   public hasSession(sessionId: string): boolean {
@@ -151,7 +213,7 @@ export class SseHub {
 
     for (const sc of sessionStreams) {
       try {
-        sc.close();
+        sc.ctrl.close();
       } catch {}
     }
 

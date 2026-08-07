@@ -192,6 +192,16 @@ export interface ListenOptions {
   path?: string;
   /** TCP port for HTTP transport. @default 3000 */
   port?: number | string;
+  /**
+   * Cache hints returned on list/discover responses for MCP 2026-07-28.
+   * Ignored for older protocol versions.
+   */
+  listCache?: {
+    /** @default "public" */
+    cacheScope?: "public" | "private";
+    /** @default 60000 */
+    ttlMs?: number;
+  };
   /** Session expiry in milliseconds for HTTP sessions. @default 60000 */
   sessionTimeout?: number;
   tls?: TlsOptions;

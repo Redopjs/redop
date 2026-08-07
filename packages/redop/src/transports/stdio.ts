@@ -1,10 +1,13 @@
 // ─────────────────────────────────────────────
-//  redop — stdio transport (MCP 2025-11-25)
+//  redop — stdio transport
 //
 //  Reads newline-delimited JSON-RPC from stdin,
 //  writes responses + notifications to stdout.
 //  All logging MUST go to stderr — stdout is
 //  exclusively for valid MCP messages.
+//
+//  Supports MCP 2026-07-28 (stateless) and legacy
+//  initialize-based versions.
 // ─────────────────────────────────────────────
 
 import type {
@@ -18,6 +21,20 @@ import type {
   ResourceContents,
   ServerInfoOptions,
 } from "../types";
+import {
+  buildServerCapabilities,
+  DEFAULT_LIST_CACHE,
+  inputRequiredResult,
+  isInputRequiredError,
+  isStatelessProtocol,
+  negotiateProtocolVersion,
+  PROTOCOL_LATEST,
+  readProtocolMeta,
+  SUPPORTED_PROTOCOL_VERSIONS,
+  type SupportedProtocolVersion,
+  withCacheHints,
+  withResultType,
+} from "./protocol";
 
 // ── Types ─────────────────────────────────────
 
@@ -140,13 +157,11 @@ function buildToolList(tools: Map<string, ResolvedTool>) {
 }
 
 // Supported protocol versions in preference order.
-const SUPPORTED_VERSIONS = ["2025-11-25", "2024-11-05"] as const;
-type SupportedVersion = (typeof SUPPORTED_VERSIONS)[number];
+const SUPPORTED_VERSIONS = [...SUPPORTED_PROTOCOL_VERSIONS] as const;
+type SupportedVersion = SupportedProtocolVersion;
 
 function negotiateVersion(clientVersion: string): SupportedVersion {
-  // Echo back the client's version if we support it; otherwise our latest.
-  const match = SUPPORTED_VERSIONS.find((v) => v === clientVersion);
-  return match ?? SUPPORTED_VERSIONS[0];
+  return negotiateProtocolVersion(clientVersion, PROTOCOL_LATEST);
 }
 
 // ── Transport ─────────────────────────────────
@@ -293,42 +308,83 @@ export function startStdioTransport(
         ? negotiateVersion(clientVersion)
         : SUPPORTED_VERSIONS[0];
 
-      const capabilities: Record<string, unknown> = {};
-      if (caps.tools) {
-        capabilities.tools = { listChanged: true };
-      }
-      if (caps.resources) {
-        capabilities.resources = { subscribe: true, listChanged: true };
-      }
-      if (caps.prompts) {
-        capabilities.prompts = { listChanged: true };
-      }
-      // Advertise task support on tools/call
-      capabilities.tasks = {
-        list: {},
-        cancel: {},
-        requests: { tools: { call: {} } },
-      };
-
-      respond(id, {
-        protocolVersion: negotiatedVersion,
-        capabilities,
-        serverInfo: {
-          name: serverInfo.name,
-          version: serverInfo.version,
-          title: serverInfo.title || undefined,
-          description: serverInfo.description || undefined,
-          icons: serverInfo.icons?.length ? serverInfo.icons : undefined,
-          websiteUrl: serverInfo.websiteUrl || undefined,
-        },
-        instructions: serverInfo.instructions || undefined,
-      });
+      respond(
+        id,
+        withResultType(
+          {
+            protocolVersion: negotiatedVersion,
+            capabilities: buildServerCapabilities(caps, negotiatedVersion),
+            serverInfo: {
+              name: serverInfo.name,
+              version: serverInfo.version,
+              title: serverInfo.title || undefined,
+              description: serverInfo.description || undefined,
+              icons: serverInfo.icons?.length ? serverInfo.icons : undefined,
+              websiteUrl: serverInfo.websiteUrl || undefined,
+            },
+            instructions: serverInfo.instructions || undefined,
+          },
+          negotiatedVersion
+        )
+      );
       return;
+    }
+
+    // ── server/discover ────────────────────────────────────────────────────
+    if (method === "server/discover") {
+      const meta = readProtocolMeta(params);
+      if (meta.protocolVersion) {
+        negotiatedVersion = negotiateVersion(meta.protocolVersion);
+      } else {
+        negotiatedVersion = PROTOCOL_LATEST;
+      }
+      initialized = true;
+      respond(
+        id,
+        withResultType(
+          withCacheHints(
+            {
+              supportedVersions: [...SUPPORTED_PROTOCOL_VERSIONS],
+              capabilities: buildServerCapabilities(caps, negotiatedVersion),
+              instructions: serverInfo.instructions,
+              serverInfo: {
+                name: serverInfo.name,
+                version: serverInfo.version,
+                ...(serverInfo.title ? { title: serverInfo.title } : {}),
+                ...(serverInfo.description
+                  ? { description: serverInfo.description }
+                  : {}),
+                ...(serverInfo.websiteUrl
+                  ? { websiteUrl: serverInfo.websiteUrl }
+                  : {}),
+                ...(serverInfo.icons?.length
+                  ? { icons: serverInfo.icons }
+                  : {}),
+              },
+            },
+            DEFAULT_LIST_CACHE,
+            PROTOCOL_LATEST
+          ),
+          PROTOCOL_LATEST
+        )
+      );
+      return;
+    }
+
+    // Per-request version from _meta (2026-07-28) — no initialize required.
+    {
+      const meta = readProtocolMeta(params);
+      if (meta.protocolVersion) {
+        negotiatedVersion = negotiateVersion(meta.protocolVersion);
+        if (isStatelessProtocol(negotiatedVersion)) {
+          initialized = true;
+        }
+      }
     }
 
     // ── ping ───────────────────────────────────────────────────────────────
     if (method === "ping") {
-      respond(id, {});
+      respond(id, withResultType({}, negotiatedVersion));
       return;
     }
 
@@ -338,7 +394,17 @@ export function startStdioTransport(
         respondError(id, -32_601, "Tools capability not enabled");
         return;
       }
-      respond(id, { tools: buildToolList(tools) });
+      respond(
+        id,
+        withResultType(
+          withCacheHints(
+            { tools: buildToolList(tools) },
+            DEFAULT_LIST_CACHE,
+            negotiatedVersion
+          ),
+          negotiatedVersion
+        )
+      );
       return;
     }
 
@@ -352,6 +418,8 @@ export function startStdioTransport(
       const p = params as {
         name?: string;
         arguments?: Record<string, unknown>;
+        inputResponses?: Record<string, unknown>;
+        requestState?: string;
         _meta?: { progressToken?: string | number };
       };
       const toolName = p.name;
@@ -376,10 +444,15 @@ export function startStdioTransport(
               });
             };
 
+      const metaInfo = readProtocolMeta(params);
       const requestMeta: RequestMeta = {
         abortSignal: signal,
+        clientCapabilities: metaInfo.clientCapabilities,
         headers: {},
+        inputResponses: p.inputResponses,
         progressCallback,
+        protocolVersion: negotiatedVersion,
+        requestState: p.requestState,
         transport: "stdio",
       };
 
@@ -393,18 +466,32 @@ export function startStdioTransport(
         );
         checkAbort();
         if (!execution.ok) {
-          respond(id, {
-            content: [
+          if (
+            isInputRequiredError(execution.error) &&
+            isStatelessProtocol(negotiatedVersion)
+          ) {
+            respond(id, inputRequiredResult(execution.error));
+            scheduleAfterResponse(execution.afterResponse, `tool:${toolName}`);
+            return;
+          }
+          respond(
+            id,
+            withResultType(
               {
-                type: "text",
-                text:
-                  execution.error instanceof Error
-                    ? execution.error.message
-                    : String(execution.error),
+                content: [
+                  {
+                    type: "text",
+                    text:
+                      execution.error instanceof Error
+                        ? execution.error.message
+                        : String(execution.error),
+                  },
+                ],
+                isError: true,
               },
-            ],
-            isError: true,
-          });
+              negotiatedVersion
+            )
+          );
           scheduleAfterResponse(execution.afterResponse, `tool:${toolName}`);
           return;
         }
@@ -417,21 +504,31 @@ export function startStdioTransport(
         if (tool.outputSchema && raw !== null && typeof raw === "object") {
           result.structuredContent = raw;
         }
-        respond(id, result);
+        respond(id, withResultType(result, negotiatedVersion));
         scheduleAfterResponse(execution.afterResponse, `tool:${toolName}`);
       } catch (err) {
         if (signal.aborted) {
           return; // Cancelled — no response per spec
         }
-        respond(id, {
-          content: [
+        if (isInputRequiredError(err) && isStatelessProtocol(negotiatedVersion)) {
+          respond(id, inputRequiredResult(err));
+          return;
+        }
+        respond(
+          id,
+          withResultType(
             {
-              type: "text",
-              text: err instanceof Error ? err.message : String(err),
+              content: [
+                {
+                  type: "text",
+                  text: err instanceof Error ? err.message : String(err),
+                },
+              ],
+              isError: true,
             },
-          ],
-          isError: true,
-        });
+            negotiatedVersion
+          )
+        );
       }
       return;
     }
@@ -443,15 +540,25 @@ export function startStdioTransport(
         return;
       }
       const staticRes = [...resources.values()].filter((r) => !r.isTemplate);
-      respond(id, {
-        resources: staticRes.map((r) => ({
-          uri: r.uri,
-          name: r.name,
-          ...(r.description ? { description: r.description } : {}),
-          ...(r.mimeType ? { mimeType: r.mimeType } : {}),
-          ...(r.icons?.length ? { icons: r.icons } : {}),
-        })),
-      });
+      respond(
+        id,
+        withResultType(
+          withCacheHints(
+            {
+              resources: staticRes.map((r) => ({
+                uri: r.uri,
+                name: r.name,
+                ...(r.description ? { description: r.description } : {}),
+                ...(r.mimeType ? { mimeType: r.mimeType } : {}),
+                ...(r.icons?.length ? { icons: r.icons } : {}),
+              })),
+            },
+            DEFAULT_LIST_CACHE,
+            negotiatedVersion
+          ),
+          negotiatedVersion
+        )
+      );
       return;
     }
 
@@ -565,13 +672,23 @@ export function startStdioTransport(
         respondError(id, -32_601, "Prompts capability not enabled");
         return;
       }
-      respond(id, {
-        prompts: [...prompts.values()].map((p) => ({
-          name: p.name,
-          ...(p.description ? { description: p.description } : {}),
-          ...(p.arguments?.length ? { arguments: p.arguments } : {}),
-        })),
-      });
+      respond(
+        id,
+        withResultType(
+          withCacheHints(
+            {
+              prompts: [...prompts.values()].map((p) => ({
+                name: p.name,
+                ...(p.description ? { description: p.description } : {}),
+                ...(p.arguments?.length ? { arguments: p.arguments } : {}),
+              })),
+            },
+            DEFAULT_LIST_CACHE,
+            negotiatedVersion
+          ),
+          negotiatedVersion
+        )
+      );
       return;
     }
 

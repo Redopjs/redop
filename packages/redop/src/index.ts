@@ -89,3 +89,18 @@ export type {
 
 // Errors
 export { McpError, McpErrorCode } from "./types";
+
+// MCP 2026-07-28 MRTR helpers
+export {
+  InputRequiredError,
+  PROTOCOL_LATEST,
+  requireInput,
+  SUPPORTED_PROTOCOL_VERSIONS,
+  TASKS_EXTENSION_ID,
+} from "./transports/protocol";
+export type {
+  InputRequest,
+  InputRequests,
+  InputResponses,
+  SupportedProtocolVersion,
+} from "./transports/protocol";

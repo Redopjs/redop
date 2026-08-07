@@ -26,10 +26,32 @@ new Redop({
 
 - the MCP endpoint is `http://localhost:3000/mcp`
 - `POST /mcp` handles JSON-RPC requests
-- `GET /mcp` opens the event stream used for server notifications
-- `DELETE /mcp` closes the session
+- for MCP `2026-07-28`, traffic is **stateless** — no session header is required
+- for older protocol versions, `GET /mcp` opens the event stream and `DELETE /mcp` closes the session
 
-## Verify with curl
+## Verify with curl (MCP 2026-07-28)
+
+Discover capabilities without a session:
+
+```sh
+curl -i -X POST http://localhost:3000/mcp \
+  -H 'Content-Type: application/json' \
+  -H 'MCP-Protocol-Version: 2026-07-28' \
+  -H 'Mcp-Method: server/discover' \
+  --data '{"jsonrpc":"2.0","id":0,"method":"server/discover","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28"}}}'
+```
+
+List tools (note the required `Mcp-Method` header):
+
+```sh
+curl -X POST http://localhost:3000/mcp \
+  -H 'Content-Type: application/json' \
+  -H 'MCP-Protocol-Version: 2026-07-28' \
+  -H 'Mcp-Method: tools/list' \
+  --data '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28"}}}'
+```
+
+## Verify with curl (legacy sessioned)
 
 Start by verifying that `initialize` responds:
 
@@ -50,8 +72,6 @@ curl -X POST http://localhost:3000/mcp \
   --data '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
 ```
 
-Redop expects `MCP-Session-Id` on non-`initialize` HTTP requests.
-
 ## Troubleshooting
 
 Turn on transport logging:
@@ -66,5 +86,6 @@ Turn on transport logging:
 ## Related pages
 
 - [Listening and Transports](/documentation/listening-and-transports)
+- [HTTP Transport Behavior](/reference/http-transport)
 - [Verify with local clients](/getting-started/verify-clients)
 - [Debug HTTP connections and sessions](/guides/debug-http)

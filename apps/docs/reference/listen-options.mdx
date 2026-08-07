@@ -65,7 +65,8 @@ app.listen({
 | `path` | MCP endpoint path for HTTP. Defaults to `/mcp`. |
 | `health` | Enable `/health` or provide `{ path }` for a custom health route. Disabled by default. |
 | `debug` | Writes HTTP transport logs to stderr. |
-| `sessionTimeout` | HTTP session expiry in milliseconds. Defaults to `60000`. |
+| `sessionTimeout` | Legacy HTTP session expiry in milliseconds. Defaults to `60000`. Unused for MCP `2026-07-28`. |
+| `listCache` | Override list/discover cache hints (`ttlMs`, `cacheScope`) for MCP `2026-07-28`. |
 | `onListen` | Callback fired after the HTTP server starts. Receives `{ hostname, port, url }`. |
 | `cors` | Enable permissive CORS or provide the typed `CorsOptions` shape. |
 | `maxBodySize` | Maximum accepted request body size in bytes in the public type surface. |

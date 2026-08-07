@@ -1,5 +1,7 @@
 // ─────────────────────────────────────────────
-//  redop — HTTP transport (Streamable HTTP 2025-11-25)
+//  redop — HTTP transport (Streamable HTTP)
+//  Supports MCP 2026-07-28 (stateless) plus legacy
+//  sessioned versions (2025-11-25 / 2025-03-26 / 2024-11-05).
 // ─────────────────────────────────────────────
 
 import { JSON5, serve } from "bun";
@@ -16,6 +18,29 @@ import type {
   ResourceContents,
   ServerInfoOptions,
 } from "../types";
+import {
+  buildServerCapabilities,
+  clientHasTasksExtension,
+  DEFAULT_LIST_CACHE,
+  DEFAULT_READ_CACHE,
+  HEADER_MISMATCH,
+  inputRequiredResult,
+  isInputRequiredError,
+  isStatelessProtocol,
+  isSupportedProtocolVersion,
+  MISSING_REQUIRED_CLIENT_CAPABILITY,
+  negotiateProtocolVersion,
+  PROTOCOL_LATEST,
+  PROTOCOL_LEGACY_DEFAULT,
+  readProtocolMeta,
+  SUPPORTED_PROTOCOL_VERSIONS,
+  type SupportedProtocolVersion,
+  TASKS_EXTENSION_ID,
+  UNSUPPORTED_PROTOCOL_VERSION,
+  validateMcpHeaders,
+  withCacheHints,
+  withResultType,
+} from "./protocol";
 import { SseHub } from "./sse";
 
 // ── Task types ────────────────────────────────
@@ -29,6 +54,8 @@ type TaskStatus =
 
 interface StoredTask {
   createdAt: string;
+  inputRequests?: Record<string, unknown>;
+  inputResponses?: Record<string, unknown>;
   lastUpdatedAt: string;
   pollInterval?: number;
   result?: Record<string, unknown>;
@@ -47,8 +74,20 @@ function isoNow() {
 }
 
 function taskPublic(t: StoredTask) {
-  const { waiters: _w, result: _r, rpcError: _e, ...pub } = t;
-  return pub;
+  const {
+    waiters: _w,
+    result: _r,
+    rpcError: _e,
+    inputResponses: _ir,
+    ...pub
+  } = t;
+  const out: Record<string, unknown> = { ...pub };
+  if (t.status === "input_required" && t.inputRequests) {
+    out.inputRequests = t.inputRequests;
+  } else {
+    delete out.inputRequests;
+  }
+  return out;
 }
 
 const TERMINAL = new Set<TaskStatus>(["completed", "failed", "cancelled"]);
@@ -204,6 +243,51 @@ function createStore(sessionTimeoutMs: number) {
         this._wake(t);
         return true;
       },
+      requireInput(
+        id: string,
+        inputRequests: Record<string, unknown>,
+        statusMessage?: string
+      ) {
+        const t = tasks.get(id);
+        if (!t || isTerminal(t.status)) {
+          return false;
+        }
+        t.status = "input_required";
+        t.inputRequests = inputRequests;
+        t.lastUpdatedAt = isoNow();
+        if (statusMessage) {
+          t.statusMessage = statusMessage;
+        }
+        this._wake(t);
+        return true;
+      },
+      update(
+        id: string,
+        inputResponses?: Record<string, unknown>
+      ): { ok: true; task: StoredTask } | { ok: false; error: string } {
+        const t = tasks.get(id);
+        if (!t) {
+          return { ok: false, error: "Task not found" };
+        }
+        if (isTerminal(t.status)) {
+          return {
+            ok: false,
+            error: `Already in terminal status '${t.status}'`,
+          };
+        }
+        if (inputResponses && typeof inputResponses === "object") {
+          t.inputResponses = {
+            ...(t.inputResponses ?? {}),
+            ...inputResponses,
+          };
+        }
+        t.inputRequests = undefined;
+        t.status = "working";
+        t.lastUpdatedAt = isoNow();
+        t.statusMessage = undefined;
+        this._wake(t);
+        return { ok: true, task: t };
+      },
       list(cursor?: string, limit = 50) {
         const all = [...tasks.values()];
         const start = cursor ? Number.parseInt(cursor) : 0;
@@ -266,8 +350,9 @@ interface RpcContext {
     req: RequestMeta
   ) => Promise<DeferredExecution<PromptHandlerResult>>;
   hub: SseHub;
+  listCache: { cacheScope: "public" | "private"; ttlMs: number };
   prompts: Map<string, ResolvedPrompt>;
-  protocolVersion: SupportedVersion;
+  protocolVersion: SupportedProtocolVersion;
   readResource: (
     uri: string,
     req: RequestMeta
@@ -332,30 +417,66 @@ const NOTIFICATION_HANDLERS: Record<string, NotificationHandler> = {
 
 const RPC_HANDLERS: Record<string, RpcHandler> = {
   initialize: (params, ctx) => {
-    const capabilities: Record<string, unknown> = {};
-    if (ctx.caps.tools) {
-      capabilities.tools = { listChanged: true };
+    // 2026-07-28 retired initialize; keep it for dual-mode clients that still
+    // speak older revisions (or probe with initialize).
+    if (isStatelessProtocol(ctx.protocolVersion)) {
+      return {
+        result: withResultType(
+          withCacheHints(
+            {
+              supportedVersions: [...SUPPORTED_PROTOCOL_VERSIONS],
+              capabilities: buildServerCapabilities(ctx.caps, ctx.protocolVersion),
+              instructions: ctx.serverInfo.instructions,
+              serverInfo: ctx.serverInfo,
+            },
+            ctx.listCache,
+            ctx.protocolVersion
+          ),
+          ctx.protocolVersion
+        ),
+      };
     }
-    if (ctx.caps.resources) {
-      capabilities.resources = { subscribe: true, listChanged: true };
-    }
-    if (ctx.caps.prompts) {
-      capabilities.prompts = { listChanged: true };
-    }
-    capabilities.tasks = {
-      list: {},
-      cancel: {},
-      requests: { tools: { call: {} } },
-    };
 
     return {
       result: {
         protocolVersion: ctx.protocolVersion,
-        capabilities,
+        capabilities: buildServerCapabilities(ctx.caps, ctx.protocolVersion),
         serverInfo: ctx.serverInfo,
         instructions: ctx.serverInfo.instructions,
         sessionId: ctx.sessionId,
       },
+    };
+  },
+
+  "server/discover": (_params, ctx) => {
+    return {
+      result: withResultType(
+        withCacheHints(
+          {
+            supportedVersions: [...SUPPORTED_PROTOCOL_VERSIONS],
+            capabilities: buildServerCapabilities(ctx.caps, ctx.protocolVersion),
+            instructions: ctx.serverInfo.instructions,
+            serverInfo: {
+              name: ctx.serverInfo.name,
+              version: ctx.serverInfo.version,
+              ...(ctx.serverInfo.title ? { title: ctx.serverInfo.title } : {}),
+              ...(ctx.serverInfo.description
+                ? { description: ctx.serverInfo.description }
+                : {}),
+              ...(ctx.serverInfo.websiteUrl
+                ? { websiteUrl: ctx.serverInfo.websiteUrl }
+                : {}),
+              ...(ctx.serverInfo.icons?.length
+                ? { icons: ctx.serverInfo.icons }
+                : {}),
+            },
+          },
+          ctx.listCache,
+          // Always include cache hints on discover — it is a 2026-07-28 RPC.
+          PROTOCOL_LATEST
+        ),
+        PROTOCOL_LATEST
+      ),
     };
   },
 
@@ -368,18 +489,25 @@ const RPC_HANDLERS: Record<string, RpcHandler> = {
       };
     }
     return {
-      result: {
-        tools: [...ctx.tools.values()].map((t) => ({
-          name: t.name,
-          description: t.description ?? "",
-          inputSchema: t.inputSchema,
-          ...(t.title ? { title: t.title } : {}),
-          ...(t.icons?.length ? { icons: t.icons } : {}),
-          ...(t.outputSchema ? { outputSchema: t.outputSchema } : {}),
-          ...(t.annotations ? { annotations: t.annotations } : {}),
-          execution: { taskSupport: t.taskSupport ?? "optional" },
-        })),
-      },
+      result: withResultType(
+        withCacheHints(
+          {
+            tools: [...ctx.tools.values()].map((t) => ({
+              name: t.name,
+              description: t.description ?? "",
+              inputSchema: t.inputSchema,
+              ...(t.title ? { title: t.title } : {}),
+              ...(t.icons?.length ? { icons: t.icons } : {}),
+              ...(t.outputSchema ? { outputSchema: t.outputSchema } : {}),
+              ...(t.annotations ? { annotations: t.annotations } : {}),
+              execution: { taskSupport: t.taskSupport ?? "optional" },
+            })),
+          },
+          ctx.listCache,
+          ctx.protocolVersion
+        ),
+        ctx.protocolVersion
+      ),
     };
   },
 
@@ -393,6 +521,8 @@ const RPC_HANDLERS: Record<string, RpcHandler> = {
       name: string;
       arguments?: unknown;
       task?: { ttl?: number };
+      inputResponses?: Record<string, unknown>;
+      requestState?: string;
       _meta?: { progressToken?: string | number };
     };
     const tool = ctx.tools.get(p.name);
@@ -400,8 +530,20 @@ const RPC_HANDLERS: Record<string, RpcHandler> = {
       return { error: { code: -32_602, message: `Unknown tool: ${p.name}` } };
     }
 
-    if (p.task !== undefined) {
-      const task = ctx.store.tasks.create(p.task?.ttl);
+    const stateless = isStatelessProtocol(ctx.protocolVersion);
+    const wantsTask =
+      !stateless && p.task !== undefined
+        ? true
+        : Boolean(
+            stateless &&
+              clientHasTasksExtension(ctx.requestMeta.clientCapabilities) &&
+              tool.taskSupport === "required"
+          );
+
+    if (wantsTask) {
+      const task = ctx.store.tasks.create(
+        !stateless ? p.task?.ttl : undefined
+      );
       (async () => {
         try {
           const execution = await ctx.runTool(
@@ -410,6 +552,23 @@ const RPC_HANDLERS: Record<string, RpcHandler> = {
             ctx.requestMeta
           );
           if (!execution.ok) {
+            if (
+              isInputRequiredError(execution.error) &&
+              isStatelessProtocol(ctx.protocolVersion)
+            ) {
+              ctx.store.tasks.requireInput(
+                task.taskId,
+                (execution.error.inputRequests ?? {}) as Record<
+                  string,
+                  unknown
+                >,
+                execution.error.message
+              );
+              queueMicrotask(() => {
+                void execution.afterResponse().catch(() => {});
+              });
+              return;
+            }
             ctx.store.tasks.fail(task.taskId, String(execution.error));
             queueMicrotask(() => {
               void execution.afterResponse().catch(() => {});
@@ -434,7 +593,13 @@ const RPC_HANDLERS: Record<string, RpcHandler> = {
           ctx.store.tasks.fail(task.taskId, String(e));
         }
       })();
-      return { result: { task: taskPublic(task) } };
+      return {
+        result: withResultType(
+          { task: taskPublic(task) },
+          ctx.protocolVersion,
+          "task"
+        ),
+      };
     }
 
     try {
@@ -444,12 +609,24 @@ const RPC_HANDLERS: Record<string, RpcHandler> = {
         ctx.requestMeta
       );
       if (!execution.ok) {
+        if (
+          isInputRequiredError(execution.error) &&
+          isStatelessProtocol(ctx.protocolVersion)
+        ) {
+          return {
+            afterResponse: execution.afterResponse,
+            result: inputRequiredResult(execution.error),
+          };
+        }
         return {
           afterResponse: execution.afterResponse,
-          result: {
-            content: [{ type: "text", text: String(execution.error) }],
-            isError: true,
-          },
+          result: withResultType(
+            {
+              content: [{ type: "text", text: String(execution.error) }],
+              isError: true,
+            },
+            ctx.protocolVersion
+          ),
         };
       }
       const raw = execution.result;
@@ -459,10 +636,19 @@ const RPC_HANDLERS: Record<string, RpcHandler> = {
       if (tool.outputSchema && raw !== null && typeof raw === "object") {
         result.structuredContent = raw;
       }
-      return { afterResponse: execution.afterResponse, result };
-    } catch (e) {
       return {
-        result: { content: [{ type: "text", text: String(e) }], isError: true },
+        afterResponse: execution.afterResponse,
+        result: withResultType(result, ctx.protocolVersion),
+      };
+    } catch (e) {
+      if (isInputRequiredError(e) && isStatelessProtocol(ctx.protocolVersion)) {
+        return { result: inputRequiredResult(e) };
+      }
+      return {
+        result: withResultType(
+          { content: [{ type: "text", text: String(e) }], isError: true },
+          ctx.protocolVersion
+        ),
       };
     }
   },
@@ -475,15 +661,22 @@ const RPC_HANDLERS: Record<string, RpcHandler> = {
     }
     const staticRes = [...ctx.resources.values()].filter((r) => !r.isTemplate);
     return {
-      result: {
-        resources: staticRes.map((r) => ({
-          uri: r.uri,
-          name: r.name,
-          ...(r.description ? { description: r.description } : {}),
-          ...(r.mimeType ? { mimeType: r.mimeType } : {}),
-          ...(r.icons?.length ? { icons: r.icons } : {}),
-        })),
-      },
+      result: withResultType(
+        withCacheHints(
+          {
+            resources: staticRes.map((r) => ({
+              uri: r.uri,
+              name: r.name,
+              ...(r.description ? { description: r.description } : {}),
+              ...(r.mimeType ? { mimeType: r.mimeType } : {}),
+              ...(r.icons?.length ? { icons: r.icons } : {}),
+            })),
+          },
+          ctx.listCache,
+          ctx.protocolVersion
+        ),
+        ctx.protocolVersion
+      ),
     };
   },
 
@@ -495,14 +688,21 @@ const RPC_HANDLERS: Record<string, RpcHandler> = {
     }
     const templateRes = [...ctx.resources.values()].filter((r) => r.isTemplate);
     return {
-      result: {
-        resourceTemplates: templateRes.map((r) => ({
-          uriTemplate: r.uri,
-          name: r.name,
-          ...(r.description ? { description: r.description } : {}),
-          ...(r.mimeType ? { mimeType: r.mimeType } : {}),
-        })),
-      },
+      result: withResultType(
+        withCacheHints(
+          {
+            resourceTemplates: templateRes.map((r) => ({
+              uriTemplate: r.uri,
+              name: r.name,
+              ...(r.description ? { description: r.description } : {}),
+              ...(r.mimeType ? { mimeType: r.mimeType } : {}),
+            })),
+          },
+          ctx.listCache,
+          ctx.protocolVersion
+        ),
+        ctx.protocolVersion
+      ),
     };
   },
 
@@ -519,6 +719,15 @@ const RPC_HANDLERS: Record<string, RpcHandler> = {
     try {
       const execution = await ctx.readResource(uri, ctx.requestMeta);
       if (!execution.ok) {
+        if (
+          isInputRequiredError(execution.error) &&
+          isStatelessProtocol(ctx.protocolVersion)
+        ) {
+          return {
+            afterResponse: execution.afterResponse,
+            result: inputRequiredResult(execution.error),
+          };
+        }
         return {
           afterResponse: execution.afterResponse,
           error: {
@@ -537,14 +746,33 @@ const RPC_HANDLERS: Record<string, RpcHandler> = {
           : { uri, mimeType: contents.mimeType, blob: contents.blob };
       return {
         afterResponse: execution.afterResponse,
-        result: { contents: [wireContent] },
+        result: withResultType(
+          withCacheHints(
+            { contents: [wireContent] },
+            DEFAULT_READ_CACHE,
+            ctx.protocolVersion
+          ),
+          ctx.protocolVersion
+        ),
       };
     } catch (e) {
+      if (isInputRequiredError(e) && isStatelessProtocol(ctx.protocolVersion)) {
+        return { result: inputRequiredResult(e) };
+      }
       return { error: { code: -32_602, message: String(e) } };
     }
   },
 
   "resources/subscribe": (params, ctx) => {
+    if (isStatelessProtocol(ctx.protocolVersion)) {
+      return {
+        error: {
+          code: -32_601,
+          message:
+            "resources/subscribe is replaced by subscriptions/listen in MCP 2026-07-28",
+        },
+      };
+    }
     if (!ctx.caps.resources) {
       return {
         error: { code: -32_601, message: "Resources capability not enabled" },
@@ -559,6 +787,15 @@ const RPC_HANDLERS: Record<string, RpcHandler> = {
   },
 
   "resources/unsubscribe": (params, ctx) => {
+    if (isStatelessProtocol(ctx.protocolVersion)) {
+      return {
+        error: {
+          code: -32_601,
+          message:
+            "resources/unsubscribe is replaced by subscriptions/listen in MCP 2026-07-28",
+        },
+      };
+    }
     if (!ctx.caps.resources) {
       return {
         error: { code: -32_601, message: "Resources capability not enabled" },
@@ -579,13 +816,20 @@ const RPC_HANDLERS: Record<string, RpcHandler> = {
       };
     }
     return {
-      result: {
-        prompts: [...ctx.prompts.values()].map((p) => ({
-          name: p.name,
-          ...(p.description ? { description: p.description } : {}),
-          ...(p.arguments?.length ? { arguments: p.arguments } : {}),
-        })),
-      },
+      result: withResultType(
+        withCacheHints(
+          {
+            prompts: [...ctx.prompts.values()].map((p) => ({
+              name: p.name,
+              ...(p.description ? { description: p.description } : {}),
+              ...(p.arguments?.length ? { arguments: p.arguments } : {}),
+            })),
+          },
+          ctx.listCache,
+          ctx.protocolVersion
+        ),
+        ctx.protocolVersion
+      ),
     };
   },
 
@@ -603,6 +847,15 @@ const RPC_HANDLERS: Record<string, RpcHandler> = {
     try {
       const execution = await ctx.getPrompt(name, args, ctx.requestMeta);
       if (!execution.ok) {
+        if (
+          isInputRequiredError(execution.error) &&
+          isStatelessProtocol(ctx.protocolVersion)
+        ) {
+          return {
+            afterResponse: execution.afterResponse,
+            result: inputRequiredResult(execution.error),
+          };
+        }
         return {
           afterResponse: execution.afterResponse,
           error: {
@@ -616,21 +869,79 @@ const RPC_HANDLERS: Record<string, RpcHandler> = {
       }
       const raw = execution.result;
       const result = Array.isArray(raw) ? { messages: raw } : raw;
-      return { afterResponse: execution.afterResponse, result };
+      return {
+        afterResponse: execution.afterResponse,
+        result: withResultType(
+          result as Record<string, unknown>,
+          ctx.protocolVersion
+        ),
+      };
     } catch (e) {
+      if (isInputRequiredError(e) && isStatelessProtocol(ctx.protocolVersion)) {
+        return { result: inputRequiredResult(e) };
+      }
       return { error: { code: -32_602, message: String(e) } };
     }
   },
 
   "tasks/get": (params, ctx) => {
+    if (
+      isStatelessProtocol(ctx.protocolVersion) &&
+      !clientHasTasksExtension(ctx.requestMeta.clientCapabilities)
+    ) {
+      return {
+        error: {
+          code: MISSING_REQUIRED_CLIENT_CAPABILITY,
+          message: `Missing required client capability: extensions.${TASKS_EXTENSION_ID}`,
+        },
+      };
+    }
     const task = ctx.store.tasks.get(params?.taskId);
     if (!task) {
       return { error: { code: -32_602, message: "Task not found" } };
     }
-    return { result: taskPublic(task) };
+    return {
+      result: withResultType(taskPublic(task), ctx.protocolVersion),
+    };
+  },
+
+  "tasks/update": (params, ctx) => {
+    if (isStatelessProtocol(ctx.protocolVersion)) {
+      if (!clientHasTasksExtension(ctx.requestMeta.clientCapabilities)) {
+        return {
+        error: {
+          code: MISSING_REQUIRED_CLIENT_CAPABILITY,
+          message: `Missing required client capability: extensions.${TASKS_EXTENSION_ID}`,
+        },
+      };
+      }
+    }
+    const taskId = params?.taskId as string | undefined;
+    if (!taskId) {
+      return { error: { code: -32_602, message: "Missing taskId" } };
+    }
+    const updated = ctx.store.tasks.update(
+      taskId,
+      params?.inputResponses as Record<string, unknown> | undefined
+    );
+    if (!updated.ok) {
+      return { error: { code: -32_602, message: updated.error } };
+    }
+    return {
+      result: withResultType({}, ctx.protocolVersion),
+    };
   },
 
   "tasks/result": async (params, ctx) => {
+    if (isStatelessProtocol(ctx.protocolVersion)) {
+      return {
+        error: {
+          code: -32_601,
+          message:
+            "tasks/result was removed in MCP 2026-07-28; poll with tasks/get",
+        },
+      };
+    }
     const taskId = params?.taskId as string | undefined;
     if (!taskId) {
       return { error: { code: -32_602, message: "Missing taskId" } };
@@ -671,6 +982,14 @@ const RPC_HANDLERS: Record<string, RpcHandler> = {
   },
 
   "tasks/list": (params, ctx) => {
+    if (isStatelessProtocol(ctx.protocolVersion)) {
+      return {
+        error: {
+          code: -32_601,
+          message: "tasks/list is not part of the io.modelcontextprotocol/tasks extension",
+        },
+      };
+    }
     const { tasks: taskList, nextCursor } = ctx.store.tasks.list(
       params?.cursor
     );
@@ -682,6 +1001,17 @@ const RPC_HANDLERS: Record<string, RpcHandler> = {
   },
 
   "tasks/cancel": (params, ctx) => {
+    if (
+      isStatelessProtocol(ctx.protocolVersion) &&
+      !clientHasTasksExtension(ctx.requestMeta.clientCapabilities)
+    ) {
+      return {
+        error: {
+          code: MISSING_REQUIRED_CLIENT_CAPABILITY,
+          message: `Missing required client capability: extensions.${TASKS_EXTENSION_ID}`,
+        },
+      };
+    }
     const taskId = params?.taskId as string | undefined;
     if (!taskId) {
       return { error: { code: -32_602, message: "Missing taskId" } };
@@ -702,7 +1032,12 @@ const RPC_HANDLERS: Record<string, RpcHandler> = {
     }
 
     ctx.store.tasks.cancel(taskId);
-    return { result: taskPublic(ctx.store.tasks.get(taskId)!) };
+    return {
+      result: withResultType(
+        taskPublic(ctx.store.tasks.get(taskId)!),
+        ctx.protocolVersion
+      ),
+    };
   },
 };
 
@@ -736,17 +1071,6 @@ async function handleJsonRpc(
 }
 
 // ── HTTP transport ────────────────────────────
-
-const SUPPORTED_VERSIONS = ["2025-11-25", "2025-03-26", "2024-11-05"] as const;
-type SupportedVersion = (typeof SUPPORTED_VERSIONS)[number];
-
-function negotiateVersion(clientVersion: string | undefined): SupportedVersion {
-  if (!clientVersion) {
-    // Spec: missing version header falls back to 2025-03-26
-    return "2025-03-26";
-  }
-  return SUPPORTED_VERSIONS.find((v) => v === clientVersion) ?? "2025-03-26";
-}
 
 export interface TransportHandle {
   /**
@@ -796,6 +1120,10 @@ export function startHttpTransport(
   const store = createStore(opts.sessionTimeout ?? 60_000);
   const mcpPath = opts.path ?? "/mcp";
   const hub = new SseHub();
+  const listCache = {
+    ttlMs: opts.listCache?.ttlMs ?? DEFAULT_LIST_CACHE.ttlMs,
+    cacheScope: opts.listCache?.cacheScope ?? DEFAULT_LIST_CACHE.cacheScope,
+  };
 
   let healthPath: string | null = null;
   if (opts.health === true) {
@@ -831,6 +1159,7 @@ export function startHttpTransport(
         url: req.url,
         protocolVersion: ver,
         sessionId: req.headers.get("mcp-session-id"),
+        mcpMethod: req.headers.get("mcp-method"),
         accept: req.headers.get("accept"),
         origin,
       });
@@ -856,7 +1185,7 @@ export function startHttpTransport(
             "Access-Control-Allow-Origin": origin ?? "*",
             "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
             "Access-Control-Allow-Headers":
-              "Content-Type, Accept, MCP-Session-Id, MCP-Protocol-Version, Last-Event-ID",
+              "Content-Type, Accept, MCP-Session-Id, MCP-Protocol-Version, Mcp-Method, Mcp-Name, Last-Event-ID",
           },
         });
       }
@@ -879,10 +1208,21 @@ export function startHttpTransport(
       }
 
       // ── Protocol version guard ────────────────
-      if (ver && !SUPPORTED_VERSIONS.includes(ver as SupportedVersion)) {
+      if (ver && !isSupportedProtocolVersion(ver)) {
         debugLog("unsupported_version", { url: req.url, protocolVersion: ver });
         return Response.json(
-          { error: "Unsupported MCP-Protocol-Version" },
+          {
+            jsonrpc: "2.0",
+            id: null,
+            error: {
+              code: UNSUPPORTED_PROTOCOL_VERSION,
+              message: "Unsupported MCP-Protocol-Version",
+              data: {
+                supported: [...SUPPORTED_PROTOCOL_VERSIONS],
+                requested: ver,
+              },
+            },
+          },
           { status: 400 }
         );
       }
@@ -891,8 +1231,22 @@ export function startHttpTransport(
         return new Response("Not Found", { status: 404 });
       }
 
-      // ── DELETE — session termination ──────────
+      // ── DELETE — session termination (legacy) ─
       if (req.method === "DELETE") {
+        if (isStatelessProtocol(ver ?? undefined)) {
+          return Response.json(
+            {
+              jsonrpc: "2.0",
+              id: null,
+              error: {
+                code: -32_600,
+                message:
+                  "Sessions are not used in MCP 2026-07-28; DELETE is not applicable",
+              },
+            },
+            { status: 400 }
+          );
+        }
         const sid = req.headers.get("mcp-session-id");
         if (!(sid && store.sessions.has(sid))) {
           debugLog("session_close_missing", { sessionId: sid });
@@ -904,8 +1258,22 @@ export function startHttpTransport(
         return Response.json({ ok: true, sessionId: sid, terminated: true });
       }
 
-      // ── GET — SSE stream ──────────────────────
+      // ── GET — legacy SSE stream ───────────────
       if (req.method === "GET") {
+        if (isStatelessProtocol(ver ?? undefined)) {
+          return Response.json(
+            {
+              jsonrpc: "2.0",
+              id: null,
+              error: {
+                code: -32_600,
+                message:
+                  "Use POST subscriptions/listen for notifications in MCP 2026-07-28",
+              },
+            },
+            { status: 400 }
+          );
+        }
         if (!(req.headers.get("accept") ?? "").includes("text/event-stream")) {
           return new Response("Not Acceptable", { status: 406 });
         }
@@ -953,14 +1321,76 @@ export function startHttpTransport(
           );
         }
 
+        const metaInfo = readProtocolMeta(
+          body.params as Record<string, unknown> | undefined
+        );
+        const headerVersion = ver ?? undefined;
+        const metaVersion = metaInfo.protocolVersion;
+
+        if (
+          headerVersion &&
+          metaVersion &&
+          headerVersion !== metaVersion
+        ) {
+          return Response.json(
+            {
+              jsonrpc: "2.0",
+              id: body.id ?? null,
+              error: {
+                code: HEADER_MISMATCH,
+                message: `Header mismatch: MCP-Protocol-Version header value '${headerVersion}' does not match body _meta value '${metaVersion}'`,
+              },
+            },
+            { status: 400 }
+          );
+        }
+
+        const requestedVersion =
+          headerVersion ??
+          metaVersion ??
+          (body.method === "initialize"
+            ? ((body.params as { protocolVersion?: string } | undefined)
+                ?.protocolVersion ?? undefined)
+            : undefined);
+
+        if (requestedVersion && !isSupportedProtocolVersion(requestedVersion)) {
+          return Response.json(
+            {
+              jsonrpc: "2.0",
+              id: body.id ?? null,
+              error: {
+                code: UNSUPPORTED_PROTOCOL_VERSION,
+                message: "Unsupported MCP-Protocol-Version",
+                data: {
+                  supported: [...SUPPORTED_PROTOCOL_VERSIONS],
+                  requested: requestedVersion,
+                },
+              },
+            },
+            { status: 400 }
+          );
+        }
+
+        const protocolVersion = negotiateProtocolVersion(
+          requestedVersion,
+          body.method === "server/discover"
+            ? PROTOCOL_LATEST
+            : PROTOCOL_LEGACY_DEFAULT
+        );
+        const stateless = isStatelessProtocol(protocolVersion);
+
         // ── Client-sent notifications (no id) ────
         if (body.id === undefined || body.id === null) {
           if (body.method) {
             const notifHandler = NOTIFICATION_HANDLERS[body.method];
             if (notifHandler) {
               const sid = req.headers.get("mcp-session-id");
-              const activeSession = sid && store.sessions.has(sid) ? sid : "";
-              const ctx: RpcContext = buildCtx(activeSession, "2025-03-26");
+              const activeSession =
+                !stateless && sid && store.sessions.has(sid) ? sid : "";
+              const ctx: RpcContext = buildCtx(
+                activeSession,
+                protocolVersion
+              );
               try {
                 notifHandler(body.params, ctx);
               } catch (e) {
@@ -980,17 +1410,112 @@ export function startHttpTransport(
           return new Response(null, { status: 202 });
         }
 
-        // ── Session resolution ────────────────────
-        const sid = req.headers.get("mcp-session-id");
-        let activeSession: string;
+        // ── Header validation (2026-07-28) ───────
+        if (stateless) {
+          const headerError = validateMcpHeaders({
+            method: body.method,
+            params: body.params as Record<string, unknown> | undefined,
+            mcpMethodHeader: req.headers.get("mcp-method"),
+            mcpNameHeader: req.headers.get("mcp-name"),
+          });
+          if (headerError) {
+            debugLog("header_mismatch", {
+              method: body.method,
+              error: headerError,
+            });
+            return Response.json(
+              {
+                jsonrpc: "2.0",
+                id: body.id,
+                error: { code: HEADER_MISMATCH, message: headerError },
+              },
+              { status: 400 }
+            );
+          }
+        }
 
-        if (body.method === "initialize") {
+        // ── subscriptions/listen (SSE over POST) ─
+        if (body.method === "subscriptions/listen") {
+          if (!stateless) {
+            return Response.json(
+              {
+                jsonrpc: "2.0",
+                id: body.id,
+                error: {
+                  code: -32_601,
+                  message:
+                    "subscriptions/listen requires MCP-Protocol-Version 2026-07-28",
+                },
+              },
+              { status: 404 }
+            );
+          }
+
+          const filter =
+            ((body.params as { notifications?: Record<string, unknown> })
+              ?.notifications as {
+              toolsListChanged?: boolean;
+              promptsListChanged?: boolean;
+              resourcesListChanged?: boolean;
+              resourceSubscriptions?: string[];
+            }) ?? {};
+
+          const subscriptionId = String(body.id);
+          bunServer.timeout(req, 0);
+
+          for (const uri of filter.resourceSubscriptions ?? []) {
+            subscribeRes(uri, subscriptionId);
+          }
+
+          debugLog("subscriptions_listen_open", {
+            subscriptionId,
+            filter,
+          });
+
+          const { stream } = hub.open(subscriptionId, null, {
+            onOpen() {
+              // Spec: first event acknowledges the subscription.
+              hub.send(subscriptionId, {
+                jsonrpc: "2.0",
+                method: "notifications/subscriptions/acknowledged",
+                params: {
+                  _meta: {
+                    "io.modelcontextprotocol/subscriptionId": body.id,
+                  },
+                },
+              });
+            },
+            filter: {
+              toolsListChanged: Boolean(filter.toolsListChanged),
+              promptsListChanged: Boolean(filter.promptsListChanged),
+              resourcesListChanged: Boolean(filter.resourcesListChanged),
+            },
+          });
+
+          return new Response(stream, {
+            headers: {
+              "Content-Type": "text/event-stream",
+              "Cache-Control": "no-cache",
+              Connection: "keep-alive",
+              "MCP-Protocol-Version": protocolVersion,
+              "Access-Control-Allow-Origin": origin ?? "*",
+              "X-Accel-Buffering": "no",
+            },
+          });
+        }
+
+        // ── Session resolution (legacy only) ─────
+        const sid = req.headers.get("mcp-session-id");
+        let activeSession = "";
+
+        if (stateless) {
+          // Stateless core: ignore Mcp-Session-Id entirely.
+          activeSession = "";
+        } else if (body.method === "initialize") {
           if (sid && store.sessions.has(sid)) {
-            // Re-initialize on an existing session — refresh and reuse.
             store.sessions.touch(sid);
             activeSession = sid;
           } else {
-            // Fresh initialize — mint a new session.
             activeSession = store.sessions.create();
             debugLog("session_minted", { sessionId: activeSession });
           }
@@ -998,14 +1523,12 @@ export function startHttpTransport(
           store.sessions.touch(sid);
           activeSession = sid;
         } else if (sid) {
-          // Unknown session ID on a non-initialize request → 404.
           debugLog("post_unknown_session", {
             sessionId: sid,
             method: body.method,
           });
           return Response.json({ error: "Session not found" }, { status: 404 });
         } else {
-          // No session ID on a non-initialize request → 400.
           debugLog("post_missing_session", { method: body.method });
           return Response.json(
             { error: "Missing MCP-Session-Id header" },
@@ -1013,23 +1536,14 @@ export function startHttpTransport(
           );
         }
 
-        const protocolVersion = negotiateVersion(
-          body.method === "initialize"
-            ? ((body.params as { protocolVersion?: string } | undefined)
-                ?.protocolVersion ??
-                ver ??
-                undefined)
-            : (ver ?? undefined)
-        );
-
         debugLog("rpc_request", {
           requestId: body.id,
           method: body.method,
-          sessionId: activeSession,
+          sessionId: activeSession || undefined,
           protocolVersion,
+          stateless,
         });
 
-        // ── Progress callback ─────────────────────
         const progressToken = (body.params as any)?._meta?.progressToken as
           | string
           | number
@@ -1039,6 +1553,9 @@ export function startHttpTransport(
           progressToken === undefined
             ? undefined
             : (p: { progress: number; total?: number; message?: string }) => {
+                if (!activeSession) {
+                  return;
+                }
                 hub.send(activeSession, {
                   jsonrpc: "2.0",
                   method: "notifications/progress",
@@ -1047,11 +1564,16 @@ export function startHttpTransport(
               };
 
         const requestMeta: RequestMeta = {
+          clientCapabilities: metaInfo.clientCapabilities,
           headers: Object.fromEntries(req.headers.entries()),
+          inputResponses: (body.params as { inputResponses?: Record<string, unknown> })
+            ?.inputResponses,
           method: req.method,
           progressCallback,
+          protocolVersion,
           raw: req,
-          sessionId: activeSession,
+          requestState: (body.params as { requestState?: string })?.requestState,
+          sessionId: activeSession || undefined,
           transport: "http",
           url: req.url,
           abortSignal: (req as any).signal,
@@ -1064,7 +1586,7 @@ export function startHttpTransport(
         debugLog("rpc_response", {
           requestId: body.id,
           method: body.method,
-          sessionId: activeSession,
+          sessionId: activeSession || undefined,
           protocolVersion,
           hasError: "error" in wireResponse,
         });
@@ -1073,17 +1595,30 @@ export function startHttpTransport(
           debugLog("after_response_error", {
             requestId: body.id,
             method: body.method,
-            sessionId: activeSession,
+            sessionId: activeSession || undefined,
             error: String(error),
           });
         });
 
+        const responseHeaders: Record<string, string> = {
+          "MCP-Protocol-Version": protocolVersion,
+          "Access-Control-Allow-Origin": origin ?? "*",
+        };
+        if (!stateless && activeSession) {
+          responseHeaders["Mcp-Session-Id"] = activeSession;
+        }
+
+        // Method not found → HTTP 404 for 2026-07-28 (spec).
+        const httpStatus =
+          stateless &&
+          "error" in wireResponse &&
+          (wireResponse as JsonRpcResponse).error?.code === -32_601
+            ? 404
+            : 200;
+
         return Response.json(wireResponse, {
-          headers: {
-            "Mcp-Session-Id": activeSession,
-            "Mcp-Protocol-Version": protocolVersion,
-            "Access-Control-Allow-Origin": origin ?? "*",
-          },
+          status: httpStatus,
+          headers: responseHeaders,
         });
       }
 
@@ -1092,7 +1627,7 @@ export function startHttpTransport(
       // ── Context factory ───────────────────────
       function buildCtx(
         sessionId: string,
-        protocolVersion: SupportedVersion,
+        protocolVersion: SupportedProtocolVersion,
         requestMeta?: RequestMeta
       ): RpcContext {
         return {
@@ -1108,9 +1643,10 @@ export function startHttpTransport(
             headers: {},
             method: "POST",
             raw: req,
-            sessionId,
+            sessionId: sessionId || undefined,
             transport: "http",
             url: req.url,
+            protocolVersion,
           },
           serverInfo,
           caps,
@@ -1118,22 +1654,23 @@ export function startHttpTransport(
           hub,
           sessionId,
           protocolVersion,
+          listCache,
         };
       }
     },
   });
 
-  const url = `http${opts.tls ? "s" : ""}://${hostname}:${port}${mcpPath}`;
-  opts.onListen?.({ hostname, port, url });
+  const listenUrl = `http${opts.tls ? "s" : ""}://${hostname}:${port}${mcpPath}`;
+  opts.onListen?.({ hostname, port, url: listenUrl });
 
   return {
     push(sessionId, payload, options) {
       return hub.send(sessionId, payload, options);
     },
     broadcast(payload, options) {
-      for (const sid of store.sessions.ids()) {
-        hub.send(sid, payload, options);
-      }
+      // Fan out once to every open stream (legacy sessions and
+      // subscriptions/listen). Stream filters decide delivery.
+      hub.broadcastFiltered(payload, options);
     },
     stop() {
       server.stop();

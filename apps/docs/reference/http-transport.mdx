@@ -7,32 +7,57 @@ description: Reference for the current Redop HTTP transport routes, defaults, pr
 
 | Method | Path | Purpose |
 | ------ | ---- | ------- |
-| `POST` | `/mcp` | JSON-RPC endpoint |
-| `GET` | `/mcp` | Event stream |
-| `DELETE` | `/mcp` | Session termination |
+| `POST` | `/mcp` | JSON-RPC endpoint (also opens `subscriptions/listen` SSE streams) |
+| `GET` | `/mcp` | Legacy event stream (sessioned protocol versions) |
+| `DELETE` | `/mcp` | Legacy session termination |
 
 ## Current defaults
 
 - path: `/mcp`
 - hostname: `127.0.0.1`
 - port: `3000`
-- session timeout: `60_000` ms
+- session timeout: `60_000` ms (legacy sessioned versions only)
+- list cache hints: `ttlMs: 60000`, `cacheScope: "public"` (MCP `2026-07-28`)
 
 ## Protocol versions
 
 The current transport negotiates:
 
+- `2026-07-28` (stateless Streamable HTTP)
 - `2025-11-25`
 - `2025-03-26`
 - `2024-11-05`
 
+## MCP 2026-07-28 (stateless)
+
+When the client sends `MCP-Protocol-Version: 2026-07-28`:
+
+- no `initialize` handshake or `Mcp-Session-Id` is required
+- optional `server/discover` advertises `supportedVersions`, capabilities, and cache hints
+- requests must include `Mcp-Method` (and `Mcp-Name` for `tools/call`, `resources/read`, `prompts/get`, and task methods)
+- list/read/discover results include `ttlMs`, `cacheScope`, and `resultType`
+- tasks are advertised under `capabilities.extensions["io.modelcontextprotocol/tasks"]`
+- mid-call input uses MRTR (`resultType: "input_required"`) via `requireInput()` / `InputRequiredError`
+- change notifications use `POST` `subscriptions/listen` instead of legacy `GET /mcp`
+
+## Legacy sessioned behavior
+
+For older protocol versions:
+
+- `initialize` mints an `Mcp-Session-Id`
+- non-initialize requests require that session header
+- `GET /mcp` opens an Inspector-style SSE stream
+- `DELETE /mcp` terminates the session
+- tasks remain under top-level `capabilities.tasks`
+
 ## Practical behavior
 
 - the transport supports streamable HTTP-style MCP traffic
-- it keeps compatibility behavior for local Inspector-style SSE flows
-- it can adopt client-provided session IDs for local tooling interoperability
+- it keeps compatibility behavior for local Inspector-style SSE flows on legacy versions
+- it can adopt client-provided session IDs for local tooling interoperability (legacy)
 - it exposes an optional health route when you enable `health`
 - `debug: true` logs requests, session behavior, protocol negotiation, and responses to stderr
+- `listCache` on `listen()` overrides default list cache hints for `2026-07-28`
 
 ## Current caveats
 
