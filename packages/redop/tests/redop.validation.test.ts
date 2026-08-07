@@ -857,7 +857,7 @@ describe("Redop resource and prompt lifecycle", () => {
         }
       );
       expect(allowedToolCall.body.result.isError).toBeUndefined();
-      expect(allowedToolCall.body.result.content[0].text).toContain("ok:true");
+      expect(allowedToolCall.body.result.content[0].text).toContain('"ok":true');
 
       const allowedResourceRead = await postJsonRpc(
         url,

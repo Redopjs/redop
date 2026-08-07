@@ -3,7 +3,8 @@
 // ─────────────────────────────────────────────
 
 import { detectAdapter } from "./adapters/schema";
-import { startHttpTransport } from "./transports/http";
+import { createHttpApp, type HttpApp } from "./transports/http-app";
+import { getBunHttpTransport } from "./transports/http-registry";
 import { startStdioTransport } from "./transports/stdio";
 import type {
   AfterHook,
@@ -12,6 +13,7 @@ import type {
   CapabilityOptions,
   Context,
   ErrorHook,
+  HandlerOptions,
   InferPromptInput,
   InferSchemaOutput,
   ListenOptions,
@@ -40,6 +42,7 @@ import type {
   ToolHandlerEvent,
   TransformHook,
 } from "./types";
+import type { HttpFetch } from "./transports/runtime";
 
 // ── Internal registry ─────────────────────────
 
@@ -317,6 +320,7 @@ export class Redop<C extends Record<string, unknown> = {}> {
   private _serverInfo: Required<ServerInfoOptions>;
   private _broadcast?: BroadcastFn;
   private _subscribedSessions = new Map<string, Set<string>>(); // uri → sessions
+  private _httpApp: HttpApp | null = null;
 
   constructor(options: RedopOptions = {}) {
     const serverInfo = options.serverInfo ?? {};
@@ -1538,6 +1542,53 @@ export class Redop<C extends Record<string, unknown> = {}> {
 
   // ── Start server ──────────────────────────────────────────────────────────
 
+  /**
+   * Return a portable `fetch`-compatible MCP handler.
+   *
+   * Use this with Cloudflare, Vercel, Node, or any runtime that accepts a
+   * Web-standard `(Request) => Response` function. Bun apps can keep using
+   * `.listen(...)` which remains the default long-running path.
+   *
+   * Pass a platform `waitUntil` through the second `runtime` argument (or via
+   * `@redopjs/redop/cloudflare` / `@redopjs/redop/vercel`) so `afterResponse`
+   * hooks still run on serverless isolates.
+   */
+  handler(opts: HandlerOptions = {}): HttpFetch {
+    if (!this._httpApp) {
+      const runTool = (
+        name: string,
+        args: Record<string, unknown>,
+        meta: RequestMeta
+      ) => this._executeTool(name, args, meta);
+      const readResource = (uri: string, req: RequestMeta) =>
+        this._executeResource(uri, req);
+      const getPrompt = (
+        name: string,
+        args: Record<string, string> | undefined,
+        req: RequestMeta
+      ) => this._executePrompt(name, args, req);
+
+      this._httpApp = createHttpApp(
+        this._tools,
+        this._resources,
+        this._prompts,
+        runTool,
+        readResource,
+        getPrompt,
+        (uri, sid) => this._subscribeResource(uri, sid),
+        (uri, sid) => this._unsubscribeResource(uri, sid),
+        opts,
+        this._serverInfo,
+        this._resolvedCapabilities()
+      );
+      this._setBroadcast((sessionId, data) => {
+        this._httpApp!.push(sessionId, data);
+      });
+    }
+
+    return (req, runtime) => this._httpApp!.fetch(req, runtime);
+  }
+
   listen(): this;
   listen(port: number | string, hostname?: string): this;
   listen(opts: ListenOptions): this;
@@ -1582,6 +1633,12 @@ export class Redop<C extends Record<string, unknown> = {}> {
     }
 
     if (transport === "http") {
+      const startHttpTransport = getBunHttpTransport();
+      if (!startHttpTransport) {
+        throw new Error(
+          "[redop] HTTP `.listen()` requires the Bun runtime entry (`@redopjs/redop`). For Cloudflare, Vercel, or Node, use `app.handler()` or `@redopjs/redop/cloudflare` / `@redopjs/redop/vercel` / `@redopjs/redop/node`."
+        );
+      }
       const { push } = startHttpTransport(
         this._tools,
         this._resources,

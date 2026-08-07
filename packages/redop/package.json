@@ -1,13 +1,16 @@
 {
   "name": "@redopjs/redop",
   "version": "0.1.6",
-  "description": "Bun-native MCP server framework",
+  "description": "Bun-first MCP server framework with portable runtime adapters",
   "keywords": [
     "bun",
+    "cloudflare",
     "framework",
     "mcp",
     "model-context-protocol",
-    "typescript"
+    "nodejs",
+    "typescript",
+    "vercel"
   ],
   "homepage": "https://redop.useagents.site",
   "repository": {
@@ -34,6 +37,18 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./cloudflare": {
+      "types": "./dist/cloudflare.d.ts",
+      "default": "./dist/cloudflare.js"
+    },
+    "./vercel": {
+      "types": "./dist/vercel.d.ts",
+      "default": "./dist/vercel.js"
+    },
+    "./node": {
+      "types": "./dist/node.d.ts",
+      "default": "./dist/node.js"
     }
   },
   "publishConfig": {
@@ -52,6 +67,7 @@
   },
   "devDependencies": {
     "@types/bun": "latest",
+    "@types/node": "^22.13.10",
     "typescript": "^5.4.0"
   }
 }

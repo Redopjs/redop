@@ -35,7 +35,7 @@ bunx create-redop-app my-redop-app --schema json-schema
 - `--transport <http|stdio>`
 - `--components <tools,resources,prompts>`
 - `--schema <zod|json-schema|valibot|typebox>`
-- `--deploy <none|railway|fly-io|vercel>`
+- `--deploy <none|railway|fly-io|vercel|cloudflare>`
 
 ## What it generates
 
@@ -63,7 +63,8 @@ Depending on the deploy preset, it can also add:
 
 - `Dockerfile`
 - `fly.toml`
-- `vercel.json`
+- `vercel.json` + `api/index.ts`
+- `wrangler.toml`
 
 ## Generated scripts
 
@@ -82,8 +83,8 @@ bun dev
 
 - use `http` for hosted services
 - use `stdio` for local MCP command integrations
-- use `railway` or `fly-io` for long-running HTTP deployments
-- treat `vercel` as a starting point, not a drop-in match for the default Redop server shape
+- use `railway` or `fly-io` for long-running Bun HTTP deployments
+- use `vercel` or `cloudflare` for portable fetch-adapter deployments (prefer stateless MCP)
 
 ## Learn more
 

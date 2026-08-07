@@ -1,3 +1,9 @@
+// Register the Bun HTTP transport for `.listen()` before exporting the public API.
+import { startHttpTransport } from "./transports/http";
+import { registerBunHttpTransport } from "./transports/http-registry";
+
+registerBunHttpTransport(startHttpTransport);
+
 // Core class
 
 export { jwt, oauth } from "./plugins/auth";
@@ -14,6 +20,7 @@ export type {
   Context,
   CorsOptions,
   ErrorHook,
+  HandlerOptions,
   HealthOptions,
   IconMimeType,
   IconSize,
@@ -86,6 +93,8 @@ export type {
   TransformHook,
   TransportKind,
 } from "./types";
+
+export type { FetchRuntime, HttpFetch } from "./transports/runtime";
 
 // Errors
 export { McpError, McpErrorCode } from "./types";

@@ -1,0 +1,50 @@
+---
+title: Deploy to Cloudflare Workers
+description: Deploy a Redop MCP server on Cloudflare Workers with the portable fetch adapter and ctx.waitUntil.
+---
+
+Redop ships a first-class Cloudflare Workers adapter at `@redopjs/redop/cloudflare`.
+
+## Fit today
+
+| Item | Value |
+| ---- | ----- |
+| Recommended for built-in Bun `.listen()` | no — use the adapter |
+| Recommended protocol | MCP `2026-07-28` (stateless) |
+| `create-redop-app` preset | `--deploy cloudflare` |
+| Generated files | `wrangler.toml`, adapter entry in `src/index.ts` |
+| `afterResponse` | wired through `ctx.waitUntil` |
+
+## Minimal worker
+
+```ts
+import { Redop } from "@redopjs/redop";
+import { toCloudflare } from "@redopjs/redop/cloudflare";
+
+const app = new Redop({
+  serverInfo: { name: "cf-mcp", version: "0.1.0" },
+}).tool("ping", {
+  handler: async () => ({ ok: true }),
+});
+
+export default toCloudflare(app, { health: true });
+```
+
+## Scaffold
+
+```sh
+bunx create-redop-app my-cf-mcp --transport http --deploy cloudflare
+bunx wrangler deploy
+```
+
+## Capability notes
+
+- Prefer stateless MCP (`2026-07-28`). Avoid relying on in-memory sessions or long-lived SSE across isolates.
+- `afterResponse` / `onAfterResponse` are scheduled with `ctx.waitUntil`, so deferred work is not dropped when the response returns.
+- For always-on sessioned MCP + Inspector-style SSE, use Bun on Railway/Fly instead.
+
+## Next
+
+- [Deploy to Production overview](/guides/deploy/index)
+- [Runtime adapters reference](/reference/runtime-adapters)
+- [Deploy to Vercel](/guides/deploy/vercel)

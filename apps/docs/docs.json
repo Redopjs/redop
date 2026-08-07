@@ -171,6 +171,7 @@
               "reference/prompt-definition",
               "reference/built-in-plugins",
               "reference/schema-adapters",
+              "reference/runtime-adapters",
               "reference/http-transport",
               "reference/create-redop-app-cli"
             ]
@@ -207,6 +208,8 @@
               "guides/deploy/fly-io",
               "guides/deploy/docker",
               "guides/deploy/unkey",
+              "guides/deploy/node",
+              "guides/deploy/cloudflare",
               "guides/deploy/vercel"
             ]
           }

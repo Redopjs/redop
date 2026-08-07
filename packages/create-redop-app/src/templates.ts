@@ -23,22 +23,49 @@ function toServerName(name: string) {
 function renderPackageJson(options: ResolvedOptions) {
   const components = selectedComponents(options);
   const schemaDeps = schemaDependencies(options.schemaLibrary, components);
+  const isCloudflare = options.deploy === "cloudflare";
+  const isVercel = options.deploy === "vercel";
+
+  const dependencies: Record<string, string> = {
+    "@redopjs/redop": "latest",
+    ...schemaDeps,
+  };
+  if (isVercel) {
+    dependencies["@vercel/functions"] = "latest";
+  }
+
+  const devDependencies: Record<string, string> = {
+    typescript: "latest",
+  };
+  if (isCloudflare) {
+    devDependencies["@cloudflare/workers-types"] = "latest";
+    devDependencies.wrangler = "latest";
+  } else {
+    devDependencies["@types/bun"] = "latest";
+  }
+
+  const scripts: Record<string, string> = {
+    typecheck: "tsc --noEmit",
+  };
+  if (isCloudflare) {
+    scripts.dev = "wrangler dev src/index.ts";
+    scripts.deploy = "wrangler deploy";
+  } else if (isVercel) {
+    scripts.dev = "vercel dev";
+  } else {
+    scripts.dev = "bun run --watch src/index.ts";
+    if (options.transport === "http") {
+      scripts.start = "bun run src/index.ts";
+    }
+  }
+
   return JSON.stringify(
     {
-      dependencies: {
-        "@redopjs/redop": "latest",
-        ...schemaDeps,
-      },
-      devDependencies: {
-        "@types/bun": "latest",
-        typescript: "latest",
-      },
+      dependencies,
+      devDependencies,
       name: toPackageName(options.appName),
       private: true,
-      scripts: {
-        dev: "bun run --watch src/index.ts",
-        typecheck: "tsc --noEmit",
-      },
+      scripts,
       type: "module",
       version: "0.1.0",
     },
@@ -216,25 +243,13 @@ function renderComponentChain(options: ResolvedOptions) {
 function renderIndexTs(options: ResolvedOptions) {
   const components = selectedComponents(options);
   const chain = renderComponentChain(options);
+  const schemaLine = schemaImport(options.schemaLibrary, components);
+  const schemaBlock = schemaLine ? `${schemaLine}\n` : "";
 
-  const listenBlock =
-    options.transport === "stdio"
-      ? `  .listen({
-    transport: "stdio",
-  });`
-      : `  .listen({
-    port: Number(process.env.PORT ?? 3000),
-    hostname: "0.0.0.0",
-    cors: true,
-    onListen: ({ url }) => {
-      console.log(\`Redop is running at \${url}\`);
-    },
-  });`;
-
-  return `
+  if (options.transport === "stdio") {
+    return `
 import { Redop } from "@redopjs/redop";
-${schemaImport(options.schemaLibrary, components)}
-
+${schemaBlock}
 new Redop({
   serverInfo: {
     name: "${toServerName(options.appName)}",
@@ -242,7 +257,70 @@ new Redop({
   },
 })
 ${chain}
-${listenBlock}
+  .listen({
+    transport: "stdio",
+  });
+`;
+  }
+
+  if (options.deploy === "vercel") {
+    return `
+import { Redop } from "@redopjs/redop";
+import { toVercel } from "@redopjs/redop/vercel";
+import { waitUntil } from "@vercel/functions";
+${schemaBlock}
+const app = new Redop({
+  serverInfo: {
+    name: "${toServerName(options.appName)}",
+    version: "0.1.0",
+  },
+})
+${chain};
+
+export default toVercel(app, {
+  health: true,
+  waitUntil,
+});
+`;
+  }
+
+  if (options.deploy === "cloudflare") {
+    return `
+import { Redop } from "@redopjs/redop";
+import { toCloudflare } from "@redopjs/redop/cloudflare";
+${schemaBlock}
+const app = new Redop({
+  serverInfo: {
+    name: "${toServerName(options.appName)}",
+    version: "0.1.0",
+  },
+})
+${chain};
+
+export default toCloudflare(app, {
+  health: true,
+});
+`;
+  }
+
+  return `
+import { Redop } from "@redopjs/redop";
+${schemaBlock}
+new Redop({
+  serverInfo: {
+    name: "${toServerName(options.appName)}",
+    version: "0.1.0",
+  },
+})
+${chain}
+  .listen({
+    port: Number(process.env.PORT ?? 3000),
+    hostname: "0.0.0.0",
+    cors: true,
+    onListen: ({ url }) => {
+      console.log(\`Redop is running at \${url}\`);
+    },
+  });
 `;
 }
 
@@ -286,6 +364,15 @@ function renderVercelJson() {
   );
 }
 
+function renderWranglerToml(options: ResolvedOptions) {
+  const name = toPackageName(options.appName);
+  return `name = "${name}"
+main = "src/index.ts"
+compatibility_date = "2026-03-01"
+compatibility_flags = ["nodejs_compat"]
+`;
+}
+
 function renderWarnings(options: ResolvedOptions) {
   const warnings: string[] = [];
 
@@ -295,9 +382,12 @@ function renderWarnings(options: ResolvedOptions) {
     );
   }
 
-  if (options.transport === "http" && options.deploy === "vercel") {
+  if (
+    options.transport === "http" &&
+    (options.deploy === "vercel" || options.deploy === "cloudflare")
+  ) {
     warnings.push(
-      "Vercel is not a drop-in host for the default long-running Redop HTTP server shape."
+      "This preset uses Redop's portable fetch adapter. Prefer MCP 2026-07-28 (stateless). Long-lived SSE / in-memory sessions are limited on serverless/edge."
     );
   }
 
@@ -337,11 +427,24 @@ Step-by-step guides:
     case "vercel": {
       return `## Deploy on Vercel
 
-This preset adds \`vercel.json\`, but Vercel uses a function model. Treat this as a starting point, not a drop-in match for the default Redop server shape.
+This starter uses \`@redopjs/redop/vercel\` with \`waitUntil\` from \`@vercel/functions\`. Prefer MCP \`2026-07-28\` (stateless).
 
-Read this first:
+Step-by-step guide:
 
 - https://redop.useagents.site/docs/guides/deploy/vercel`;
+    }
+    case "cloudflare": {
+      return `## Deploy on Cloudflare Workers
+
+This starter uses \`@redopjs/redop/cloudflare\` and wires \`ctx.waitUntil\` for \`afterResponse\`. Prefer MCP \`2026-07-28\` (stateless).
+
+\`\`\`sh
+bunx wrangler deploy
+\`\`\`
+
+Step-by-step guide:
+
+- https://redop.useagents.site/docs/guides/deploy/cloudflare`;
     }
     default: {
       return `## Deploy
@@ -367,9 +470,22 @@ ${warnings.map((warning) => `- ${warning}`).join("\n")}
 
 `;
 
+  const isAdapterDeploy =
+    options.deploy === "vercel" || options.deploy === "cloudflare";
+
   const transportBlock =
     options.transport === "http"
-      ? `## Run
+      ? isAdapterDeploy
+        ? `## Run
+
+\`\`\`sh
+bun install
+bun dev
+\`\`\`
+
+This starter exports a portable fetch handler for ${options.deploy}.
+The MCP endpoint is \`/mcp\`. Prefer MCP protocol \`2026-07-28\` (stateless).`
+        : `## Run
 
 \`\`\`sh
 bun install
@@ -421,12 +537,15 @@ ${deploySection(options.deploy)}
 }
 
 export function buildFiles(options: ResolvedOptions): GeneratedFile[] {
+  const entryPath =
+    options.deploy === "vercel" ? "api/index.ts" : "src/index.ts";
+
   const files: GeneratedFile[] = [
     { content: renderGitignore(), path: ".gitignore" },
     { content: renderReadme(options), path: "README.md" },
     { content: renderPackageJson(options) + "\n", path: "package.json" },
     { content: renderTsconfig() + "\n", path: "tsconfig.json" },
-    { content: renderIndexTs(options), path: "src/index.ts" },
+    { content: renderIndexTs(options), path: entryPath },
   ];
 
   if (options.deploy === "fly-io") {
@@ -438,6 +557,13 @@ export function buildFiles(options: ResolvedOptions): GeneratedFile[] {
 
   if (options.deploy === "vercel") {
     files.push({ content: renderVercelJson() + "\n", path: "vercel.json" });
+  }
+
+  if (options.deploy === "cloudflare") {
+    files.push({
+      content: renderWranglerToml(options),
+      path: "wrangler.toml",
+    });
   }
 
   return files;

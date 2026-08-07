@@ -138,4 +138,49 @@ describe("Generator Logic", () => {
     expect(source.includes('.resource("app://status"')).toBe(true);
     expect(source.includes('.prompt("summarise_status"')).toBe(true);
   });
+
+  test("should generate a vercel adapter starter", async () => {
+    const options: ResolvedOptions = {
+      appName: "vercel-app",
+      components: ["tools"],
+      deploy: "vercel",
+      packageManager: "bun",
+      schemaLibrary: "zod",
+      targetDir: TEST_DIR,
+      template: "standard",
+      transport: "http",
+    };
+
+    await generateProject(options);
+
+    expect(await exists(path.join(TEST_DIR, "api/index.ts"))).toBe(true);
+    expect(await exists(path.join(TEST_DIR, "vercel.json"))).toBe(true);
+
+    const source = await readFile(path.join(TEST_DIR, "api/index.ts"), "utf8");
+    const pkg = await readFile(path.join(TEST_DIR, "package.json"), "utf8");
+
+    expect(source.includes('from "@redopjs/redop/vercel"')).toBe(true);
+    expect(source.includes("toVercel(app")).toBe(true);
+    expect(pkg.includes('"@vercel/functions"')).toBe(true);
+  });
+
+  test("should generate a cloudflare workers starter", async () => {
+    const options: ResolvedOptions = {
+      appName: "cf-app",
+      components: ["tools"],
+      deploy: "cloudflare",
+      packageManager: "bun",
+      schemaLibrary: "zod",
+      targetDir: TEST_DIR,
+      template: "standard",
+      transport: "http",
+    };
+
+    await generateProject(options);
+
+    expect(await exists(path.join(TEST_DIR, "wrangler.toml"))).toBe(true);
+    const source = await readFile(path.join(TEST_DIR, "src/index.ts"), "utf8");
+    expect(source.includes('from "@redopjs/redop/cloudflare"')).toBe(true);
+    expect(source.includes("toCloudflare(app")).toBe(true);
+  });
 });
