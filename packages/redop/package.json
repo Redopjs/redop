@@ -15,10 +15,10 @@
   "homepage": "https://redop.useagents.site",
   "repository": {
     "type": "git",
-    "url": "https://github.com/redopjs/redop.git"
+    "url": "https://github.com/Redopjs/redop"
   },
   "bugs": {
-    "url": "https://github.com/redopjs/redop/issues"
+    "url": "https://github.com/Redopjs/redop/issues"
   },
   "author": {
     "name": "Evans Maina",
