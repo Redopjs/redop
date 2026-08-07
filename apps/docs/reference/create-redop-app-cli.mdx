@@ -40,7 +40,7 @@ bunx create-redop-app my-redop-app --schema typebox
 | `-t, --transport <type>` | Transport type: `http` or `stdio`. |
 | `-c, --components <items>` | Comma-separated starter components: `tools`, `resources`, `prompts`. |
 | `-s, --schema <library>` | Schema library for generated tool inputs: `zod`, `json-schema`, `valibot`, `typebox`. |
-| `-d, --deploy <target>` | Deploy target: `none`, `railway`, `fly-io`, `vercel`, or `cloudflare`. |
+| `-d, --deploy <target>` | Deploy target: `none`, `railway`, `fly-io`, `unkey`, `vercel`, or `cloudflare`. |
 
 ## Interactive flow
 
@@ -79,5 +79,6 @@ When tools are included, the generated example uses the selected schema library:
 Generated for deploy presets:
 
 - `Dockerfile` / `fly.toml` (`fly-io`)
+- `Dockerfile` + Unkey README deploy commands (`unkey`)
 - `vercel.json` + `api/index.ts` (`vercel`)
 - `wrangler.jsonc` (`cloudflare`)

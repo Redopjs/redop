@@ -194,4 +194,32 @@ describe("Generator Logic", () => {
     expect(wrangler.includes('"main": "src/index.ts"')).toBe(true);
     expect(wrangler.includes('"nodejs_compat"')).toBe(true);
   });
+
+  test("should generate an unkey docker starter", async () => {
+    const options: ResolvedOptions = {
+      appName: "unkey-app",
+      components: ["tools"],
+      deploy: "unkey",
+      packageManager: "bun",
+      schemaLibrary: "zod",
+      targetDir: TEST_DIR,
+      template: "standard",
+      transport: "http",
+    };
+
+    await generateProject(options);
+
+    expect(await exists(path.join(TEST_DIR, "Dockerfile"))).toBe(true);
+    const dockerfile = await readFile(path.join(TEST_DIR, "Dockerfile"), "utf8");
+    const source = await readFile(path.join(TEST_DIR, "src/index.ts"), "utf8");
+    const readme = await readFile(path.join(TEST_DIR, "README.md"), "utf8");
+
+    expect(dockerfile.includes("--compile")).toBe(true);
+    expect(dockerfile.includes("EXPOSE 8080")).toBe(true);
+    expect(dockerfile.includes("redop-server")).toBe(true);
+    expect(source.includes("process.env.PORT ?? 8080")).toBe(true);
+    expect(source.includes("health: true")).toBe(true);
+    expect(readme.includes("unkey deploy")).toBe(true);
+    expect(readme.includes("## Deploy on Unkey")).toBe(true);
+  });
 });

@@ -14,7 +14,13 @@ This guide assumes:
 - the app reads `PORT` from `process.env.PORT`
 - your repository includes a `Dockerfile`
 
-If you still need a container setup, start with [Deploy with Docker](/guides/deploy/docker) and come back once your Redop app builds cleanly in Docker.
+If you scaffolded with `create-redop-app --transport http --deploy unkey`, the starter already generated:
+
+- a production `Dockerfile` (compiled Bun binary)
+- a listener on `PORT` (default `8080`) with `health: true`
+- README deploy commands for GitHub and `unkey deploy`
+
+If you still need a container setup from scratch, start with [Deploy with Docker](/guides/deploy/docker) and come back once your Redop app builds cleanly in Docker.
 
 If your Redop app lives inside a monorepo, use the monorepo production image pattern from [Deploy with Docker](/guides/deploy/docker) and point Unkey at that Dockerfile.
 
@@ -28,7 +34,7 @@ If your Redop app lives inside a monorepo, use the monorepo production image pat
 | Required files | `Dockerfile` |
 | Runtime port | Unkey injects `PORT` and defaults it to `8080` |
 | Environment model | default branch deploys to production, other branches deploy to preview |
-| `create-redop-app` preset | none today |
+| `create-redop-app` preset | `unkey` |
 | Recommended for | teams that want Docker deploys plus preview environments and Sentinel |
 
 ## Example listener shape

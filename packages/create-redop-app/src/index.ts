@@ -24,7 +24,7 @@ program
   )
   .option(
     "-d, --deploy <target>",
-    "deployment target (railway, fly-io, vercel, cloudflare, none)"
+    "deployment target (railway, fly-io, unkey, vercel, cloudflare, none)"
   )
   .action(async (dir, options) => {
     console.log(chalk.cyan(`${packageJson.name}@${packageJson.version}`));
