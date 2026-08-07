@@ -80,8 +80,7 @@ Redop does not rely on file-system routing. You compose MCP surface area directl
 Bun `.listen()` is the default local HTTP path. For other runtimes:
 
 ```ts
-import { Redop } from "@redopjs/redop";
-import { cloudflare } from "@redopjs/redop/cloudflare";
+import { Redop, cloudflare } from "@redopjs/redop/cloudflare";
 import { vercel } from "@redopjs/redop/vercel";
 import { listenNode } from "@redopjs/redop/node";
 
@@ -96,7 +95,6 @@ export default cloudflare(app);
 // Node.js
 // listenNode(app, { port: 3000, hostname: "0.0.0.0" });
 ```
-
 Package exports: `@redopjs/redop/cloudflare`, `@redopjs/redop/vercel`, `@redopjs/redop/node`.
 ## Tools, resources, and prompts
 

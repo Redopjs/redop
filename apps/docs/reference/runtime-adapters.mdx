@@ -56,15 +56,18 @@ Compat aliases: `toCloudflare`, `toVercel`, `toVercelEdge`, `toNodeListener`, `t
 
 ```ts
 // Cloudflare
-import { cloudflare } from "@redopjs/redop/cloudflare";
+import { Redop, cloudflare } from "@redopjs/redop/cloudflare";
 export default cloudflare(app);
 
 // Vercel
-import { vercel } from "@redopjs/redop/vercel";
+import { Redop, vercel } from "@redopjs/redop/vercel";
 import { waitUntil } from "@vercel/functions";
 export default vercel(app, { waitUntil });
 
 // Node
+import { Redop } from "@redopjs/redop";
 import { listenNode } from "@redopjs/redop/node";
 listenNode(app, { port: 3000, hostname: "0.0.0.0" });
 ```
+
+On Cloudflare / Vercel, import `Redop` from the adapter entry (`@redopjs/redop/cloudflare` or `@redopjs/redop/vercel`) so the worker bundle does not pull the Bun `.listen()` path.

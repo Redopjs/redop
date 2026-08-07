@@ -39,10 +39,13 @@ export type VercelAdapterOptions = HandlerOptions & {
  * ```
  */
 export function vercel(app: Redop, opts: VercelAdapterOptions = {}): HttpFetch {
-  const handler = app.handler(opts);
+  let handler: HttpFetch | null = null;
   const waitUntil = opts.waitUntil;
 
   return (request, runtime) => {
+    if (!handler) {
+      handler = app.handler(opts);
+    }
     const merged: FetchRuntime = {
       ...runtime,
       waitUntil: runtime?.waitUntil ?? waitUntil,

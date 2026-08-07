@@ -18,8 +18,7 @@ Redop ships a first-class Cloudflare Workers adapter at `@redopjs/redop/cloudfla
 ## Minimal worker
 
 ```ts
-import { Redop } from "@redopjs/redop";
-import { cloudflare } from "@redopjs/redop/cloudflare";
+import { Redop, cloudflare } from "@redopjs/redop/cloudflare";
 
 const app = new Redop({
   serverInfo: { name: "cf-mcp", version: "0.1.0" },
@@ -34,9 +33,11 @@ export default cloudflare(app, { health: true });
 
 ```sh
 bunx create-redop-app my-cf-mcp --transport http --deploy cloudflare
+bunx wrangler dev
 bunx wrangler deploy
 ```
 
+The preset writes `wrangler.toml` with `main = "src/index.ts"` and a `dev` script of `wrangler dev`. Wrangler uses that entry for both local and deploy.
 ## Capability notes
 
 - Prefer stateless MCP (`2026-07-28`). Avoid relying on in-memory sessions or long-lived SSE across isolates.

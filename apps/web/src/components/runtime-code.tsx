@@ -57,8 +57,7 @@ app.listen(3000);`,
     label: "Cloudflare",
     icon: "/runtimes/cloudflare-workers.svg",
     filename: "worker.ts",
-    code: `import { Redop } from "@redopjs/redop";
-import { cloudflare } from "@redopjs/redop/cloudflare";
+    code: `import { Redop, cloudflare } from "@redopjs/redop/cloudflare";
 import { z } from "zod";
 
 ${APP_BODY}
@@ -71,8 +70,7 @@ export default cloudflare(app);`,
     icon: "/runtimes/vercel.svg",
     iconDark: "/runtimes/vercel_dark.svg",
     filename: "api/index.ts",
-    code: `import { Redop } from "@redopjs/redop";
-import { vercel } from "@redopjs/redop/vercel";
+    code: `import { Redop, vercel } from "@redopjs/redop/vercel";
 import { waitUntil } from "@vercel/functions";
 import { z } from "zod";
 

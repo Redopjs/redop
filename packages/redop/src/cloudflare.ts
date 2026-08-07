@@ -3,8 +3,7 @@
  *
  * @example
  * ```ts
- * import { Redop } from "@redopjs/redop"
- * import { cloudflare } from "@redopjs/redop/cloudflare"
+ * import { Redop, cloudflare } from "@redopjs/redop/cloudflare"
  *
  * const app = new Redop({ serverInfo: { name: "cf-mcp", version: "0.1.0" } })
  *   .tool("ping", { handler: async () => ({ ok: true }) })

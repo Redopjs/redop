@@ -20,12 +20,16 @@ await buildOrExit("server", {
   target: "bun",
 });
 
-await buildOrExit("adapters", {
-  entrypoints: [
-    "./src/cloudflare.ts",
-    "./src/vercel.ts",
-    "./src/node.ts",
-  ],
+// Browser/edge-safe bundles: avoid node:module createRequire at load time.
+await buildOrExit("edge-adapters", {
+  entrypoints: ["./src/cloudflare.ts", "./src/vercel.ts"],
+  outdir: "./dist",
+  target: "browser",
+  external: ["bun", "@vercel/functions"],
+});
+
+await buildOrExit("node-adapter", {
+  entrypoints: ["./src/node.ts"],
   outdir: "./dist",
   target: "node",
   external: ["bun", "@vercel/functions"],

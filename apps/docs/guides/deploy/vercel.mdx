@@ -18,8 +18,7 @@ Vercel is supported through `@redopjs/redop/vercel` (`vercel` / `vercelEdge`).
 ## Minimal function
 
 ```ts
-import { Redop } from "@redopjs/redop";
-import { vercel } from "@redopjs/redop/vercel";
+import { Redop, vercel } from "@redopjs/redop/vercel";
 import { waitUntil } from "@vercel/functions";
 
 const app = new Redop({
@@ -33,7 +32,6 @@ export default vercel(app, {
   waitUntil,
 });
 ```
-
 ## Scaffold
 
 ```sh

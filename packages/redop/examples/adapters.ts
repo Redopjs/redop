@@ -5,8 +5,7 @@
  * exported for other runtimes.
  */
 
-import { Redop } from "../src/index";
-import { cloudflare } from "../src/cloudflare";
+import { Redop, cloudflare } from "../src/cloudflare";
 import { vercel } from "../src/vercel";
 import { listenNode } from "../src/node";
 
