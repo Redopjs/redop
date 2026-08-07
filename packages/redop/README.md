@@ -243,6 +243,7 @@ Redop resolves errors by MCP operation type:
 - `tools/call` failures are returned as tool results with `isError: true`
 - `resources/read` failures are returned as JSON-RPC errors
 - `prompts/get` failures are returned as JSON-RPC errors
+- OAuth/JWT auth failures (`HttpAuthError`) are returned as **HTTP 401/403** with `WWW-Authenticate` (not `isError`), so MCP clients can start the OAuth handshake
 
 `onError(...)` hooks can observe failures for logging, metrics, or tracing, but transport behavior is still normalized by Redop.
 
@@ -252,8 +253,8 @@ Redop ships with built-in helpers for common concerns:
 
 - `logger(...)`
 - `apiKey(...)`
-- `jwt(...)`
-- `oauth(...)`
+- `jwt(...)` — set `resource` for MCP OAuth PRM + 401 challenges
+- `oauth(...)` — set `resource` for Claude / connector OAuth with Clerk, WorkOS, Auth0, etc.
 
 These use the same plugin model available to application code.
 
