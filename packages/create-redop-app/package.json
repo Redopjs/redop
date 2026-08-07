@@ -1,7 +1,7 @@
 {
   "name": "create-redop-app",
-  "version": "0.1.5",
-  "description": "Scaffold a Bun-first Redop app",
+  "version": "0.1.6",
+  "description": "Scaffold a Bun-first Redop app with runtime deploy presets",
   "keywords": [
     "bun",
     "cli",
