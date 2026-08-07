@@ -6,7 +6,12 @@ registerBunHttpTransport(startHttpTransport);
 
 // Core class
 
-export { jwt, oauth } from "./plugins/auth";
+export { jwt, oauth, HttpAuthError, isHttpAuthError, requireScopes } from "./plugins/auth";
+export type {
+  HttpAuthChallenge,
+  HttpAuthErrorCode,
+  ProtectedResourceConfig,
+} from "./plugins/auth";
 // Built-in plugins
 export { apiKey, logger } from "./plugins/index";
 export { definePlugin, middleware, Redop } from "./redop";

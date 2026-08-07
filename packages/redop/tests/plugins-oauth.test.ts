@@ -17,7 +17,10 @@ describe("oauth plugin and requireScopes", () => {
       )
       .tool("ping", { handler: async () => ({ ok: true }) });
 
-    const { body } = await callHandler(app, "tools/call", { name: "ping" });
+    const { response, body } = await callHandler(app, "tools/call", {
+      name: "ping",
+    });
+    expect(response.status).toBe(401);
     expect(body.error || body.result?.isError).toBeTruthy();
   });
 
@@ -38,7 +41,7 @@ describe("oauth plugin and requireScopes", () => {
     expect(execution.ok).toBe(true);
   });
 
-  test("discovery failure surfaces as tool error", async () => {
+  test("discovery failure surfaces as auth error", async () => {
     const original = globalThis.fetch;
     globalThis.fetch = (async () =>
       new Response("nope", { status: 500 })) as typeof fetch;
@@ -56,13 +59,16 @@ describe("oauth plugin and requireScopes", () => {
         )
         .tool("ping", { handler: async () => ({ ok: true }) });
 
-      const { body } = await callHandler(app, "tools/call", {
+      const { response, body } = await callHandler(app, "tools/call", {
         name: "ping",
         headers: { authorization: "Bearer tok" },
       });
+      expect(response.status).toBe(401);
       expect(body.error || body.result?.isError).toBeTruthy();
-      const msg = String(body.error?.message ?? body.result?.content?.[0]?.text ?? "");
-      expect(msg).toMatch(/discovery|OAuth|Unauthorized|failed/i);
+      const msg = String(
+        body.error?.message ?? body.result?.content?.[0]?.text ?? ""
+      );
+      expect(msg).toMatch(/discovery|OAuth|Unauthorized|failed|token/i);
     } finally {
       globalThis.fetch = original;
     }

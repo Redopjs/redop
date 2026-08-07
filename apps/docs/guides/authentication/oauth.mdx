@@ -1,28 +1,76 @@
 ---
 title: OAuth Authentication
-description: Validate OAuth bearer tokens with issuer discovery and JWKS support.
+description: Validate OAuth bearer tokens and advertise Protected Resource Metadata so MCP clients like Claude can complete the OAuth handshake.
 ---
 
-Use `oauth(...)` when you want Redop to discover the authorization server metadata for an issuer and validate bearer tokens against that issuer's JWKS.
+Use `oauth(...)` when your MCP server is a protected resource in front of an external authorization server (Clerk, WorkOS, Auth0, or any OAuth 2.1 / OIDC issuer).
 
-## Example
+## What Redop provides
+
+With `resource` set, Redop:
+
+1. Serves **RFC 9728 Protected Resource Metadata** at `/.well-known/oauth-protected-resource` (and the path-suffixed form for `/mcp`)
+2. Returns **HTTP 401** with `WWW-Authenticate: Bearer resource_metadata="…"` when a tool/resource/prompt call is missing or has an invalid token
+3. Returns **HTTP 403** with `error="insufficient_scope"` when scopes are missing
+4. Verifies Bearer JWTs via authorization-server discovery + JWKS
+
+`initialize`, `server/discover`, and list methods stay public so clients can discover the server before authenticating.
+
+## Example (Claude / Clerk / WorkOS shape)
 
 ```ts
 import { oauth, Redop } from "@redopjs/redop";
 
-new Redop({ serverInfo: { name: "oauth-demo" } }).use(
-  oauth({
-    issuer: "https://auth.example.com",
-    audience: "my-mcp-server",
-    requiredScopes: ["tools:read"],
+new Redop({
+  serverInfo: { name: "oauth-demo", version: "0.1.0" },
+})
+  .use(
+    oauth({
+      // Authorization server (Clerk, WorkOS, Auth0, …)
+      issuer: "https://your-app.clerk.accounts.dev",
+      // Public MCP URL — must match what the client connects to
+      resource: "https://mcp.example.com/mcp",
+      requiredScopes: ["mcp:tools"],
+    }),
+  )
+  .tool("ping", {
+    handler: () => ({ ok: true }),
+  })
+  .listen(3000);
+```
+
+Or with `jwt({ jwksUri, resource })` when you already know the JWKS URL:
+
+```ts
+import { jwt, Redop } from "@redopjs/redop";
+
+app.use(
+  jwt({
+    jwksUri: "https://your-app.clerk.accounts.dev/.well-known/jwks.json",
+    issuer: "https://your-app.clerk.accounts.dev",
+    resource: "https://mcp.example.com/mcp",
+    audience: "https://mcp.example.com/mcp",
   }),
 );
 ```
 
-The discovery document and JWKS are cached automatically.
+## Client handshake (Claude)
+
+1. Client calls a protected method without a token
+2. Redop responds `401` + `WWW-Authenticate` pointing at protected resource metadata
+3. Client fetches PRM → learns `authorization_servers`
+4. Client runs OAuth (PKCE) against that issuer
+5. Client retries with `Authorization: Bearer <access_token>`
+
+## Notes
+
+- Prefer MCP `2026-07-28` (stateless) for hosted/edge deployments
+- `resource` should be the **exact** public MCP URL the user pastes into Claude
+- Discovery tries `/.well-known/oauth-authorization-server` then `/.well-known/openid-configuration` (OIDC providers like Clerk)
 
 ## See also
 
 - [API key authentication](/guides/authentication/api-key)
 - [JWT authentication](/guides/authentication/jwt)
 - [Built-in plugins reference](/reference/built-in-plugins)
+- [MCP authorization](https://modelcontextprotocol.io/specification/draft/basic/authorization)

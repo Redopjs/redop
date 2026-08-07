@@ -2,6 +2,7 @@
 //  redop — core class
 // ─────────────────────────────────────────────
 
+import type { ProtectedResourceConfig } from "./types";
 import { detectAdapter } from "./adapters/schema";
 import { createHttpApp, type HttpApp } from "./transports/http-app";
 import { getBunHttpTransport } from "./transports/http-registry";
@@ -321,6 +322,7 @@ export class Redop<C extends Record<string, unknown> = {}> {
   private _broadcast?: BroadcastFn;
   private _subscribedSessions = new Map<string, Set<string>>(); // uri → sessions
   private _httpApp: HttpApp | null = null;
+  private _protectedResource?: ProtectedResourceConfig;
 
   constructor(options: RedopOptions = {}) {
     const serverInfo = options.serverInfo ?? {};
@@ -618,7 +620,23 @@ export class Redop<C extends Record<string, unknown> = {}> {
     for (const [n, p] of plugin._prompts) {
       this._prompts.set(n, p);
     }
+    if (plugin._protectedResource) {
+      this._protectedResource = plugin._protectedResource;
+    }
     return this as unknown as Redop<C & P>;
+  }
+
+  /**
+   * Attach RFC 9728 Protected Resource Metadata for MCP OAuth clients.
+   * Called by `oauth()` / `jwt({ resource })` plugins.
+   */
+  _setProtectedResource(config: ProtectedResourceConfig): this {
+    this._protectedResource = config;
+    return this;
+  }
+
+  _getProtectedResource(): ProtectedResourceConfig | undefined {
+    return this._protectedResource;
   }
 
   // ── Tool runner ───────────────────────────────────────────────────────────
@@ -1577,7 +1595,7 @@ export class Redop<C extends Record<string, unknown> = {}> {
         getPrompt,
         (uri, sid) => this._subscribeResource(uri, sid),
         (uri, sid) => this._unsubscribeResource(uri, sid),
-        opts,
+        { ...opts, protectedResource: this._protectedResource },
         this._serverInfo,
         this._resolvedCapabilities()
       );
@@ -1652,7 +1670,7 @@ export class Redop<C extends Record<string, unknown> = {}> {
         getPrompt,
         (uri, sid) => this._subscribeResource(uri, sid),
         (uri, sid) => this._unsubscribeResource(uri, sid),
-        opts,
+        { ...opts, protectedResource: this._protectedResource },
         this._serverInfo,
         this._resolvedCapabilities()
       );

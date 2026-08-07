@@ -18,6 +18,12 @@ import type {
   ServerInfoOptions,
 } from "../types";
 import {
+  buildProtectedResourceDocument,
+  isHttpAuthError,
+  protectedResourceMetadataPaths,
+  type HttpAuthError,
+} from "../plugins/http-auth";
+import {
   buildServerCapabilities,
   clientHasTasksExtension,
   DEFAULT_LIST_CACHE,
@@ -402,6 +408,8 @@ type RpcResponsePayload = {
   afterResponse?: () => Promise<void>;
   result?: any;
   error?: { code: number; message: string };
+  /** Transport-level OAuth/JWT challenge — mapped to HTTP 401/403. */
+  httpAuth?: HttpAuthError;
 };
 type RpcHandler = (
   params: any,
@@ -632,6 +640,12 @@ const RPC_HANDLERS: Record<string, RpcHandler> = {
             result: inputRequiredResult(execution.error),
           };
         }
+        if (isHttpAuthError(execution.error)) {
+          return {
+            afterResponse: execution.afterResponse,
+            httpAuth: execution.error,
+          };
+        }
         return {
           afterResponse: execution.afterResponse,
           result: withResultType(
@@ -657,6 +671,9 @@ const RPC_HANDLERS: Record<string, RpcHandler> = {
     } catch (e) {
       if (isInputRequiredError(e) && isStatelessProtocol(ctx.protocolVersion)) {
         return { result: inputRequiredResult(e) };
+      }
+      if (isHttpAuthError(e)) {
+        return { httpAuth: e };
       }
       return {
         result: withResultType(
@@ -742,6 +759,12 @@ const RPC_HANDLERS: Record<string, RpcHandler> = {
             result: inputRequiredResult(execution.error),
           };
         }
+        if (isHttpAuthError(execution.error)) {
+          return {
+            afterResponse: execution.afterResponse,
+            httpAuth: execution.error,
+          };
+        }
         return {
           afterResponse: execution.afterResponse,
           error: {
@@ -772,6 +795,9 @@ const RPC_HANDLERS: Record<string, RpcHandler> = {
     } catch (e) {
       if (isInputRequiredError(e) && isStatelessProtocol(ctx.protocolVersion)) {
         return { result: inputRequiredResult(e) };
+      }
+      if (isHttpAuthError(e)) {
+        return { httpAuth: e };
       }
       return { error: { code: -32_602, message: String(e) } };
     }
@@ -870,6 +896,12 @@ const RPC_HANDLERS: Record<string, RpcHandler> = {
             result: inputRequiredResult(execution.error),
           };
         }
+        if (isHttpAuthError(execution.error)) {
+          return {
+            afterResponse: execution.afterResponse,
+            httpAuth: execution.error,
+          };
+        }
         return {
           afterResponse: execution.afterResponse,
           error: {
@@ -893,6 +925,9 @@ const RPC_HANDLERS: Record<string, RpcHandler> = {
     } catch (e) {
       if (isInputRequiredError(e) && isStatelessProtocol(ctx.protocolVersion)) {
         return { result: inputRequiredResult(e) };
+      }
+      if (isHttpAuthError(e)) {
+        return { httpAuth: e };
       }
       return { error: { code: -32_602, message: String(e) } };
     }
@@ -1060,7 +1095,12 @@ const RPC_HANDLERS: Record<string, RpcHandler> = {
 async function handleJsonRpc(
   body: JsonRpcRequest,
   ctx: RpcContext
-): Promise<JsonRpcResponse & { afterResponse?: () => Promise<void> }> {
+): Promise<
+  JsonRpcResponse & {
+    afterResponse?: () => Promise<void>;
+    httpAuth?: HttpAuthError;
+  }
+> {
   const { id, method, params } = body;
   const handler = RPC_HANDLERS[method];
 
@@ -1076,6 +1116,9 @@ async function handleJsonRpc(
     const payload = await handler(params, ctx);
     return { id, jsonrpc: "2.0", ...payload };
   } catch (err) {
+    if (isHttpAuthError(err)) {
+      return { id, jsonrpc: "2.0", httpAuth: err };
+    }
     return {
       id,
       jsonrpc: "2.0",
@@ -1111,7 +1154,14 @@ export interface HttpApp extends TransportHandle {
 
 export type HttpAppOptions = Pick<
   ListenOptions,
-  "cors" | "debug" | "health" | "maxBodySize" | "path" | "sessionTimeout" | "listCache"
+  | "cors"
+  | "debug"
+  | "health"
+  | "maxBodySize"
+  | "path"
+  | "sessionTimeout"
+  | "listCache"
+  | "protectedResource"
 >;
 
 export function createHttpApp(
@@ -1202,7 +1252,9 @@ export function createHttpApp(
             "Access-Control-Allow-Origin": origin ?? "*",
             "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
             "Access-Control-Allow-Headers":
-              "Content-Type, Accept, MCP-Session-Id, MCP-Protocol-Version, Mcp-Method, Mcp-Name, Last-Event-ID",
+              "Content-Type, Accept, Authorization, MCP-Session-Id, MCP-Protocol-Version, Mcp-Method, Mcp-Name, Last-Event-ID",
+            "Access-Control-Expose-Headers":
+              "WWW-Authenticate, MCP-Protocol-Version, Mcp-Session-Id",
           },
         });
       }
@@ -1222,6 +1274,37 @@ export function createHttpApp(
           service: serverInfo.name,
           transport: "http",
         });
+      }
+
+      // ── OAuth Protected Resource Metadata (RFC 9728) ─
+      if (
+        opts.protectedResource &&
+        (req.method === "GET" || req.method === "HEAD")
+      ) {
+        const paths = protectedResourceMetadataPaths(mcpPath);
+        if (
+          url.pathname === paths.root ||
+          url.pathname === paths.suffixed
+        ) {
+          if (req.method === "HEAD") {
+            return new Response(null, {
+              status: 200,
+              headers: {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": origin ?? "*",
+              },
+            });
+          }
+          return Response.json(
+            buildProtectedResourceDocument(opts.protectedResource),
+            {
+              headers: {
+                "Access-Control-Allow-Origin": origin ?? "*",
+                "Cache-Control": "public, max-age=3600",
+              },
+            }
+          );
+        }
       }
 
       // ── Protocol version guard ────────────────
@@ -1605,7 +1688,7 @@ export function createHttpApp(
           req
         );
         const response = await handleJsonRpc(body, ctx);
-        const { afterResponse, ...wireResponse } = response;
+        const { afterResponse, httpAuth, ...wireResponse } = response;
 
         debugLog("rpc_response", {
           requestId: body.id,
@@ -1613,6 +1696,7 @@ export function createHttpApp(
           sessionId: activeSession || undefined,
           protocolVersion,
           hasError: "error" in wireResponse,
+          httpAuth: Boolean(httpAuth),
         });
 
         scheduleAfterResponse(
@@ -1627,6 +1711,30 @@ export function createHttpApp(
             });
           }
         );
+
+        if (httpAuth) {
+          return new Response(
+            JSON.stringify({
+              jsonrpc: "2.0",
+              id: body.id,
+              error: {
+                code: -32_000,
+                message: httpAuth.message,
+              },
+            }),
+            {
+              status: httpAuth.status,
+              headers: {
+                "Content-Type": "application/json",
+                "WWW-Authenticate": httpAuth.wwwAuthenticate,
+                "MCP-Protocol-Version": protocolVersion,
+                "Access-Control-Allow-Origin": origin ?? "*",
+                "Access-Control-Expose-Headers":
+                  "WWW-Authenticate, MCP-Protocol-Version, Mcp-Session-Id",
+              },
+            }
+          );
+        }
 
         const responseHeaders: Record<string, string> = {
           "MCP-Protocol-Version": protocolVersion,
