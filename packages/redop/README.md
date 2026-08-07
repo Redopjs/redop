@@ -56,6 +56,7 @@ For a hosted server, the MCP endpoint will be available at `http://localhost:300
 - Reusable plugins with typed request context.
 - Explicit feature-module composition with `.use(...)`.
 - HTTP and stdio transports from one API.
+- MCP `2026-07-28` support: stateless HTTP, `server/discover`, header routing, list cache hints, MRTR (`requireInput`), and the tasks extension.
 - Post-response hooks for analytics, logging, and other best-effort work.
 - Built-in auth and logging plugins.
 

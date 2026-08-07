@@ -6,7 +6,17 @@ export interface ProgressEmitter {
 
 export interface ToolRequest {
   abortSignal?: AbortSignal;
+  /**
+   * Client capabilities from `_meta.io.modelcontextprotocol/clientCapabilities`
+   * (MCP 2026-07-28 per-request negotiation).
+   */
+  clientCapabilities?: Record<string, unknown>;
   headers: Record<string, string>;
+  /**
+   * MRTR responses echoed by the client when retrying after `input_required`
+   * (MCP 2026-07-28).
+   */
+  inputResponses?: Record<string, unknown>;
   ip?: string;
   method?: string;
   progressCallback?: (p: {
@@ -14,7 +24,13 @@ export interface ToolRequest {
     progress: number;
     total?: number;
   }) => void;
+  /** Negotiated MCP protocol version for this request. */
+  protocolVersion?: string;
   raw?: Request;
+  /**
+   * Opaque MRTR request state echoed by the client (MCP 2026-07-28).
+   */
+  requestState?: string;
   sessionId?: string;
   transport: TransportKind;
   url?: string;
