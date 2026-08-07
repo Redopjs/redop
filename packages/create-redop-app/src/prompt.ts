@@ -138,6 +138,11 @@ export async function runPrompts(
             { value: "none", label: "None (Manual)" },
             { value: "railway", label: "Railway" },
             { value: "fly-io", label: "Fly.io" },
+            {
+              value: "unkey",
+              label: "Unkey",
+              hint: "Docker + previews / Sentinel",
+            },
             { value: "vercel", label: "Vercel" },
             { value: "cloudflare", label: "Cloudflare Workers" },
           ],

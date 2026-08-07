@@ -12,7 +12,7 @@ Redop is runtime-agnostic. The same MCP app can run on Bun (`.listen()`), Node (
 | Railway | Fastest hosted Bun setup | `http` + `.listen()` | `railway` | Recommended |
 | Fly.io | Always-on Docker deployment | `http` + `.listen()` | `fly-io` | Recommended |
 | Docker | Self-hosting or custom infra | `http` + `.listen()` | `fly-io` gives you a starting Dockerfile | Recommended |
-| Unkey | Docker deployment with preview environments, rollbacks, and Sentinel | `http` + `.listen()` | none | Supported |
+| Unkey | Docker deployment with preview environments, rollbacks, and Sentinel | `http` + `.listen()` | `unkey` | Supported |
 | Node.js | Long-lived Node hosts | `http` via `@redopjs/redop/node` | none | Supported |
 | Cloudflare Workers | Edge/stateless MCP | fetch adapter | `cloudflare` | Supported (stateless) |
 | Vercel / Edge | Function/stateless MCP | fetch adapter | `vercel` | Supported (stateless) |
@@ -50,6 +50,7 @@ curl -i -X POST https://your-host/mcp \
 - [Deploy to Railway](/guides/deploy/railway) for the shortest hosted Bun path
 - [Deploy to Fly.io](/guides/deploy/fly-io) for Docker always-on
 - [Deploy with Docker](/guides/deploy/docker) for self-hosting
+- [Deploy to Unkey](/guides/deploy/unkey) for Docker + previews / Sentinel
 - [Deploy on Node.js](/guides/deploy/node) for long-lived Node
 - [Deploy to Cloudflare Workers](/guides/deploy/cloudflare) for Workers
 - [Deploy to Vercel](/guides/deploy/vercel) for Vercel / Edge

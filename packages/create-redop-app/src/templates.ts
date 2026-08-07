@@ -1,6 +1,5 @@
 import type {
   Component,
-  DeployTarget,
   GeneratedFile,
   ResolvedOptions,
   SchemaLibrary,
@@ -56,6 +55,9 @@ function renderPackageJson(options: ResolvedOptions) {
     scripts.dev = "bun run --watch src/index.ts";
     if (options.transport === "http") {
       scripts.start = "bun run src/index.ts";
+    }
+    if (options.deploy === "unkey") {
+      scripts["docker:build"] = "docker build -t redop-app .";
     }
   }
 
@@ -301,6 +303,10 @@ export default cloudflare(app, {
 `;
   }
 
+  const defaultPort = options.deploy === "unkey" ? 8080 : 3000;
+  const healthLine =
+    options.deploy === "unkey" ? `\n    health: true,` : "";
+
   return `
 import { Redop } from "@redopjs/redop";
 ${schemaBlock}
@@ -312,9 +318,9 @@ new Redop({
 })
 ${chain}
   .listen({
-    port: Number(process.env.PORT ?? 3000),
+    port: Number(process.env.PORT ?? ${defaultPort}),
     hostname: "0.0.0.0",
-    cors: true,
+    cors: true,${healthLine}
     onListen: ({ url }) => {
       console.log(\`Redop is running at \${url}\`);
     },
@@ -335,6 +341,37 @@ COPY . .
 EXPOSE 3000
 
 CMD ["bun", "start"]
+`;
+}
+
+/** Production image for Unkey Deploy (compiled Bun binary). */
+function renderUnkeyDockerfile() {
+  return `FROM oven/bun:1 AS build
+
+WORKDIR /app
+
+COPY package.json bun.lock* ./
+RUN bun install
+
+COPY . .
+
+RUN bun build \\
+  --compile \\
+  --minify-whitespace \\
+  --minify-syntax \\
+  --target bun-linux-x64 \\
+  --outfile redop-server \\
+  src/index.ts
+
+FROM gcr.io/distroless/base
+
+WORKDIR /app
+
+COPY --from=build /app/redop-server redop-server
+
+EXPOSE 8080
+
+CMD ["./redop-server"]
 `;
 }
 
@@ -395,8 +432,9 @@ function renderWarnings(options: ResolvedOptions) {
   return warnings;
 }
 
-function deploySection(deploy: DeployTarget) {
-  switch (deploy) {
+function deploySection(options: ResolvedOptions) {
+  const pkg = toPackageName(options.appName);
+  switch (options.deploy) {
     case "none": {
       return `## Deploy on Bun runtime
 
@@ -409,7 +447,11 @@ Deployment guide:
     case "railway": {
       return `## Deploy on Railway
 
-Use Railway as a long-running Bun service. Set your start command to \`bun start\`. If your service needs a separate health endpoint, enable one explicitly with \`health: true\` or \`health: { path: "/health" }\`.
+Use Railway as a long-running Bun service. Start command: \`bun start\`. If your service needs a separate health endpoint, enable one with \`health: true\` or \`health: { path: "/health" }\`.
+
+\`\`\`sh
+railway up
+\`\`\`
 
 Step-by-step guide:
 
@@ -418,17 +460,71 @@ Step-by-step guide:
     case "fly-io": {
       return `## Deploy on Fly.io
 
-This starter includes a Dockerfile and \`fly.toml\`. Deploy with \`fly launch\` and \`fly deploy\`.
+This starter includes a Dockerfile and \`fly.toml\`.
+
+\`\`\`sh
+fly launch
+fly deploy
+\`\`\`
 
 Step-by-step guides:
 
 - https://redop.useagents.site/docs/guides/deploy/fly-io
 - https://redop.useagents.site/docs/guides/deploy/docker`;
     }
+    case "unkey": {
+      return `## Deploy on Unkey
+
+This starter includes a production \`Dockerfile\` (compiled Bun binary). Unkey injects \`PORT\` (default \`8080\`) and this app binds \`0.0.0.0\` with \`/health\` enabled.
+
+Unkey Deploy is in public beta. Official CLI docs: https://www.unkey.com/docs/build-and-deploy/cli
+
+### Option A — CLI (\`unkey deploy\`)
+
+The Unkey CLI deploys a **pre-built** image. You build/push the image yourself; Unkey does not build it for you in this path.
+
+\`\`\`sh
+# 1. Install + authenticate
+npm install -g unkey
+unkey auth login
+
+# 2. Build and push a public image (private registries are not supported yet)
+docker build -t ghcr.io/<you>/${pkg}:latest .
+docker push ghcr.io/<you>/${pkg}:latest
+
+# 3. Deploy (default --env is preview; pass production when ready)
+unkey deploy ghcr.io/<you>/${pkg}:latest --project=<project-slug> --env=production
+\`\`\`
+
+Or via env vars in CI:
+
+\`\`\`sh
+export UNKEY_ROOT_KEY=unkey_xxx
+export UNKEY_PROJECT=<project-slug>
+unkey deploy ghcr.io/<you>/${pkg}:latest --env=production
+\`\`\`
+
+### Option B — GitHub (Unkey builds from Dockerfile)
+
+1. Push this repo to GitHub.
+2. In the Unkey dashboard, create a project and connect the repository.
+3. Point the build at this \`Dockerfile\`, then click Deploy.
+
+Step-by-step guide:
+
+- https://redop.useagents.site/docs/guides/deploy/unkey
+- https://www.unkey.com/docs/build-and-deploy/cli
+- https://www.unkey.com/docs/cli/overview`;
+    }
     case "vercel": {
       return `## Deploy on Vercel
 
 This starter uses \`@redopjs/redop/vercel\` with \`waitUntil\` from \`@vercel/functions\`. Prefer MCP \`2026-07-28\` (stateless).
+
+\`\`\`sh
+bunx vercel
+bunx vercel --prod
+\`\`\`
 
 Step-by-step guide:
 
@@ -443,7 +539,7 @@ Local config lives in \`wrangler.jsonc\` (\`main\` points at \`src/index.ts\`).
 
 \`\`\`sh
 bun run dev
-bunx wrangler deploy
+bun run deploy
 \`\`\`
 
 Step-by-step guide:
@@ -476,6 +572,7 @@ ${warnings.map((warning) => `- ${warning}`).join("\n")}
 
   const isAdapterDeploy =
     options.deploy === "vercel" || options.deploy === "cloudflare";
+  const defaultPort = options.deploy === "unkey" ? 8080 : 3000;
 
   const transportBlock =
     options.transport === "http"
@@ -496,13 +593,13 @@ bun install
 bun dev
 \`\`\`
 
-Your server will listen on \`PORT\` or fall back to \`3000\`.
+Your server will listen on \`PORT\` or fall back to \`${defaultPort}\`.
 The MCP endpoint is \`/mcp\`.
 
 Quick initialize check:
 
 \`\`\`sh
-curl -X POST http://localhost:3000/mcp \\
+curl -X POST http://localhost:${defaultPort}/mcp \\
   -H 'Content-Type: application/json' \\
   --data '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"manual-check","version":"1.0.0"}}}'
 \`\`\``
@@ -523,6 +620,7 @@ ${components.includes("tools") ? "- A sample tool (`ping`)\n" : ""}${components.
 
 [![Deploy to Railway](https://img.shields.io/badge/Deploy-Railway-f03603)](https://redop.useagents.site/guides/deploy/railway)
 [![Deploy to Fly.io](https://img.shields.io/badge/Deploy-Fly.io-f03603)](https://redop.useagents.site/guides/deploy/fly-io)
+[![Deploy to Unkey](https://img.shields.io/badge/Deploy-Unkey-111827)](https://redop.useagents.site/guides/deploy/unkey)
 [![Docs: Deploy to Production](https://img.shields.io/badge/Docs-Deploy%20to%20Production-111827)](https://redop.useagents.site/guides/deploy/index)
 
 A Redop starter app generated by \`create-redop-app\`.
@@ -536,7 +634,7 @@ ${warningBlock}${transportBlock}
 
 ${componentBlock}
 
-${deploySection(options.deploy)}
+${deploySection(options)}
 `;
 }
 
@@ -557,6 +655,10 @@ export function buildFiles(options: ResolvedOptions): GeneratedFile[] {
       { content: renderDockerfile(), path: "Dockerfile" },
       { content: renderFlyToml(options), path: "fly.toml" }
     );
+  }
+
+  if (options.deploy === "unkey") {
+    files.push({ content: renderUnkeyDockerfile(), path: "Dockerfile" });
   }
 
   if (options.deploy === "vercel") {

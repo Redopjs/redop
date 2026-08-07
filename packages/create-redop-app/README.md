@@ -2,9 +2,10 @@
 
 [![Deploy to Railway](https://img.shields.io/badge/Deploy-Railway-f03603)](https://redop.useagents.site/guides/deploy/railway)
 [![Deploy to Fly.io](https://img.shields.io/badge/Deploy-Fly.io-f03603)](https://redop.useagents.site/guides/deploy/fly-io)
+[![Deploy to Unkey](https://img.shields.io/badge/Deploy-Unkey-111827)](https://redop.useagents.site/guides/deploy/unkey)
 [![Docs: Deploy to Production](https://img.shields.io/badge/Docs-Deploy%20to%20Production-111827)](https://redop.useagents.site/guides/deploy/index)
 
-Scaffold a Redop MCP server with transport and deployment presets for Bun, Cloudflare, Vercel, and more.
+Scaffold a Redop MCP server with transport and deployment presets for Bun, Cloudflare, Vercel, Unkey, and more.
 
 ## Usage
 
@@ -35,7 +36,7 @@ bunx create-redop-app my-redop-app --schema json-schema
 - `--transport <http|stdio>`
 - `--components <tools,resources,prompts>`
 - `--schema <zod|json-schema|valibot|typebox>`
-- `--deploy <none|railway|fly-io|vercel|cloudflare>`
+- `--deploy <none|railway|fly-io|unkey|vercel|cloudflare>`
 
 ## What it generates
 
@@ -83,7 +84,7 @@ bun dev
 
 - use `http` for hosted services
 - use `stdio` for local MCP command integrations
-- use `railway` or `fly-io` for long-running Bun HTTP deployments
+- use `railway`, `fly-io`, or `unkey` for long-running Bun HTTP deployments
 - use `vercel` or `cloudflare` for portable fetch-adapter deployments (prefer stateless MCP)
 
 ## Learn more
@@ -94,6 +95,7 @@ bun dev
 - Deploy to production: https://redop.useagents.site/guides/deploy/index
 - Deploy to Railway: https://redop.useagents.site/guides/deploy/railway
 - Deploy to Fly.io: https://redop.useagents.site/guides/deploy/fly-io
+- Deploy to Unkey: https://redop.useagents.site/guides/deploy/unkey
 - Deploy with Docker: https://redop.useagents.site/guides/deploy/docker
 - Vercel caveat: https://redop.useagents.site/guides/deploy/vercel
 

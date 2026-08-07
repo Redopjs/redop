@@ -20,7 +20,8 @@ bunx create-redop-app my-redop-app --transport http --deploy railway
 
 - `none` for manual Bun setup
 - `railway` for hosted Bun services
-- `fly-io` for Docker-based deployment
+- `fly-io` for Docker-based deployment on Fly.io
+- `unkey` for Docker-based Unkey Deploy (previews, rollbacks, Sentinel)
 - `vercel` for Vercel via `@redopjs/redop/vercel`
 - `cloudflare` for Cloudflare Workers via `@redopjs/redop/cloudflare`
 
@@ -31,12 +32,13 @@ bunx create-redop-app my-redop-app --transport http --deploy railway
 | `none` | `src/index.ts` with `.listen()` |
 | `railway` | `src/index.ts` with `.listen()` |
 | `fly-io` | `Dockerfile`, `fly.toml` |
+| `unkey` | production `Dockerfile` (compiled Bun binary), README deploy commands |
 | `vercel` | `api/index.ts` adapter entry, `vercel.json` |
 | `cloudflare` | `src/index.ts` adapter entry, `wrangler.jsonc` |
 
 ## Good default
 
-If you are unsure, start with `--transport http --deploy railway` for hosted Bun work or `--transport stdio` for local client integrations. Use `vercel` / `cloudflare` when you specifically want those platforms and can stick to stateless MCP.
+If you are unsure, start with `--transport http --deploy railway` for hosted Bun work or `--transport stdio` for local client integrations. Use `unkey` when you want Docker deploys with preview environments. Use `vercel` / `cloudflare` when you specifically want those platforms and can stick to stateless MCP.
 
 ## Deployment guides
 
