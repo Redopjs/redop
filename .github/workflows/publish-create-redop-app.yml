@@ -3,6 +3,11 @@ name: Publish create-redop-app
 on:
   workflow_dispatch:
   push:
+    branches:
+      - main
+    paths:
+      - "packages/create-redop-app/**"
+      - ".github/workflows/publish-create-redop-app.yml"
     tags:
       - "create-redop-app-v*"
 
@@ -21,6 +26,12 @@ jobs:
         with:
           bun-version: 1.3.11
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
       - name: Install dependencies
         run: bun ci
 
@@ -31,8 +42,26 @@ jobs:
           bun test
           bun run typecheck
 
-      - name: Publish create-redop-app
+      - name: Check whether version is already published
+        id: version
         working-directory: packages/create-redop-app
-        run: bun publish --access public --tolerate-republish
+        run: |
+          NAME="$(node -p "require('./package.json').name")"
+          VERSION="$(node -p "require('./package.json').version")"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Package $NAME@$VERSION is already on npm; skipping publish."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "Package $NAME@$VERSION is not on npm; publishing."
+          fi
+
+      - name: Publish create-redop-app
+        if: steps.version.outputs.exists != 'true'
+        working-directory: packages/create-redop-app
+        run: npm publish --access public --provenance
         env:
-          NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
+          # Optional classic token. Prefer npm Trusted Publishing (OIDC) for this workflow.
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

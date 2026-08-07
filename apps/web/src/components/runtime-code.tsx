@@ -29,6 +29,16 @@ const TOOL_BODY = `  .tool("search_docs", {
     }),
   })`;
 
+const APP_BODY = `const app = new Redop({
+  serverInfo: {
+    name: "docs-server",
+    title: "Docs Server",
+    version: "0.1.0",
+    description: "Search docs and return answers.",
+  },
+})
+${TOOL_BODY};`;
+
 const EXAMPLES: RuntimeExample[] = [
   {
     id: "bun",
@@ -38,16 +48,9 @@ const EXAMPLES: RuntimeExample[] = [
     code: `import { Redop } from "@redopjs/redop";
 import { z } from "zod";
 
-new Redop({
-  serverInfo: {
-    name: "docs-server",
-    title: "Docs Server",
-    version: "0.1.0",
-    description: "Search docs and return answers.",
-  },
-})
-${TOOL_BODY}
-  .listen(3000);`,
+${APP_BODY}
+
+app.listen(3000);`,
   },
   {
     id: "cloudflare",
@@ -58,15 +61,7 @@ ${TOOL_BODY}
 import { cloudflare } from "@redopjs/redop/cloudflare";
 import { z } from "zod";
 
-const app = new Redop({
-  serverInfo: {
-    name: "docs-server",
-    title: "Docs Server",
-    version: "0.1.0",
-    description: "Search docs and return answers.",
-  },
-})
-${TOOL_BODY};
+${APP_BODY}
 
 export default cloudflare(app);`,
   },
@@ -81,15 +76,7 @@ import { vercel } from "@redopjs/redop/vercel";
 import { waitUntil } from "@vercel/functions";
 import { z } from "zod";
 
-const app = new Redop({
-  serverInfo: {
-    name: "docs-server",
-    title: "Docs Server",
-    version: "0.1.0",
-    description: "Search docs and return answers.",
-  },
-})
-${TOOL_BODY};
+${APP_BODY}
 
 export default vercel(app, { waitUntil });`,
   },
@@ -102,15 +89,7 @@ export default vercel(app, { waitUntil });`,
 import { listenNode } from "@redopjs/redop/node";
 import { z } from "zod";
 
-const app = new Redop({
-  serverInfo: {
-    name: "docs-server",
-    title: "Docs Server",
-    version: "0.1.0",
-    description: "Search docs and return answers.",
-  },
-})
-${TOOL_BODY};
+${APP_BODY}
 
 listenNode(app, {
   port: 3000,

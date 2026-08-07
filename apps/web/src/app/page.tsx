@@ -18,7 +18,7 @@ import { siteConfig } from "@/config/site";
 
 const features = [
   {
-    desc: "Ship the same MCP app on Bun by default, or adapt to Node, Cloudflare, and Vercel.",
+    desc: "One app definition for Bun, Node, Cloudflare, and Vercel — host on Railway, Cloud Run, Fly, and more.",
     icon: Globe2,
     title: "Runtime agnostic",
   },
@@ -87,9 +87,9 @@ export default function Home() {
             </h1>
 
             <p className="fade-rise fade-rise-delay-1 mx-auto mt-5 max-w-xl text-[15px] text-redop-muted leading-relaxed sm:mt-6 sm:text-base">
-              Define tools, resources, and prompts once. Deploy on Bun by
-              default, or adapt the same app to Node, Cloudflare Workers, and
-              Vercel.
+              Define tools, resources, and prompts once. Run on Bun or Node;
+              adapt to Cloudflare or Vercel. Host on Railway, Cloud Run, Fly,
+              and more.
             </p>
 
             <div className="fade-rise fade-rise-delay-2 mt-8 flex flex-col items-center gap-3 sm:mt-9 sm:flex-row">
@@ -158,8 +158,9 @@ export default function Home() {
               One MCP surface. Many runtimes.
             </h2>
             <p className="mx-auto mt-4 max-w-xl text-redop-muted text-sm leading-relaxed sm:text-base">
-              One definition. Bun for local and long-lived hosts; thin adapters
-              for Cloudflare, Vercel, and Node — without rewriting your tools.
+              Same tools, resources, and prompts. Swap only the last lines for
+              Bun, Node, Cloudflare, or Vercel — then deploy to Railway, Cloud
+              Run, Fly, Workers, or Vercel Functions.
             </p>
           </section>
 
