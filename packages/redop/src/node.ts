@@ -17,6 +17,8 @@ export { Redop, definePlugin, middleware } from "./redop";
 export {
   incomingMessageToRequest,
   listenNode,
+  nodeFetch,
+  nodeListener,
   toNodeFetch,
   toNodeHandler,
   toNodeListener,

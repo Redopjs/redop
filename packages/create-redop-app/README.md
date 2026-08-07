@@ -4,7 +4,7 @@
 [![Deploy to Fly.io](https://img.shields.io/badge/Deploy-Fly.io-f03603)](https://redop.useagents.site/guides/deploy/fly-io)
 [![Docs: Deploy to Production](https://img.shields.io/badge/Docs-Deploy%20to%20Production-111827)](https://redop.useagents.site/guides/deploy/index)
 
-Scaffold a Bun-first Redop app with transport and deployment presets.
+Scaffold a Redop MCP server with transport and deployment presets for Bun, Cloudflare, Vercel, and more.
 
 ## Usage
 

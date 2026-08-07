@@ -1,6 +1,6 @@
 # Redop
 
-Bun-native tooling for building and shipping MCP servers.
+The runtime-agnostic framework for production MCP servers.
 
 This monorepo contains the core `redop` framework, the `create-redop-app` scaffolder, the docs site, and the marketing web app.
 

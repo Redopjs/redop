@@ -101,7 +101,7 @@ export async function writeNodeResponse(
 /**
  * Create a Node `(req, res) => void` listener from a Redop app.
  */
-export function toNodeListener(
+export function nodeListener(
   app: Redop,
   opts: HandlerOptions = {}
 ): (req: IncomingMessage, res: ServerResponse) => void {
@@ -128,19 +128,28 @@ export function toNodeListener(
 }
 
 /**
- * Alias for `toNodeListener`.
+ * Alias for {@link nodeListener}.
  */
-export function toNodeHandler(
-  app: Redop,
-  opts: HandlerOptions = {}
-): (req: IncomingMessage, res: ServerResponse) => void {
-  return toNodeListener(app, opts);
-}
+export const toNodeListener = nodeListener;
+
+/**
+ * Alias for {@link nodeListener}.
+ */
+export const toNodeHandler = nodeListener;
 
 /**
  * Start a Node HTTP server for a Redop app.
  *
  * Long-lived Node process — `afterResponse` uses microtasks (same as Bun).
+ *
+ * @example
+ * ```ts
+ * import { Redop } from "@redopjs/redop"
+ * import { listenNode } from "@redopjs/redop/node"
+ *
+ * const app = new Redop({ serverInfo: { name: "node-mcp", version: "0.1.0" } })
+ * listenNode(app, { port: 3000, hostname: "0.0.0.0" })
+ * ```
  */
 export function listenNode(
   app: Redop,
@@ -149,7 +158,7 @@ export function listenNode(
   const port = Number(opts.port ?? 3000);
   const hostname = opts.hostname ?? "127.0.0.1";
   const mcpPath = opts.path ?? "/mcp";
-  const listener = toNodeListener(app, opts);
+  const listener = nodeListener(app, opts);
 
   const server = createServer(listener);
   server.listen(port, hostname, () => {
@@ -164,9 +173,14 @@ export function listenNode(
  * Expose the portable fetch handler for Node runtimes that already speak Fetch
  * (e.g. undici-based hosts).
  */
-export function toNodeFetch(
+export function nodeFetch(
   app: Redop,
   opts: HandlerOptions = {}
 ): HttpFetch {
   return app.handler(opts);
 }
+
+/**
+ * @deprecated Prefer {@link nodeFetch}. Kept for compatibility.
+ */
+export const toNodeFetch = nodeFetch;

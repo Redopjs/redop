@@ -3,7 +3,7 @@ title: Deploy to Vercel
 description: Deploy a Redop MCP server on Vercel with the portable fetch adapter and waitUntil.
 ---
 
-Vercel is supported through `@redopjs/redop/vercel` (and `toVercelEdge`).
+Vercel is supported through `@redopjs/redop/vercel` (`vercel` / `vercelEdge`).
 
 ## Fit today
 
@@ -19,7 +19,7 @@ Vercel is supported through `@redopjs/redop/vercel` (and `toVercelEdge`).
 
 ```ts
 import { Redop } from "@redopjs/redop";
-import { toVercel } from "@redopjs/redop/vercel";
+import { vercel } from "@redopjs/redop/vercel";
 import { waitUntil } from "@vercel/functions";
 
 const app = new Redop({
@@ -28,7 +28,7 @@ const app = new Redop({
   handler: async () => ({ ok: true }),
 });
 
-export default toVercel(app, {
+export default vercel(app, {
   health: true,
   waitUntil,
 });

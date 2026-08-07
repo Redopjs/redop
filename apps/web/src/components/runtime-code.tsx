@@ -55,7 +55,7 @@ ${TOOL_BODY}
     icon: "/runtimes/cloudflare-workers.svg",
     filename: "worker.ts",
     code: `import { Redop } from "@redopjs/redop";
-import { toCloudflare } from "@redopjs/redop/cloudflare";
+import { cloudflare } from "@redopjs/redop/cloudflare";
 import { z } from "zod";
 
 const app = new Redop({
@@ -68,7 +68,7 @@ const app = new Redop({
 })
 ${TOOL_BODY};
 
-export default toCloudflare(app);`,
+export default cloudflare(app);`,
   },
   {
     id: "vercel",
@@ -77,7 +77,7 @@ export default toCloudflare(app);`,
     iconDark: "/runtimes/vercel_dark.svg",
     filename: "api/index.ts",
     code: `import { Redop } from "@redopjs/redop";
-import { toVercel } from "@redopjs/redop/vercel";
+import { vercel } from "@redopjs/redop/vercel";
 import { waitUntil } from "@vercel/functions";
 import { z } from "zod";
 
@@ -91,7 +91,7 @@ const app = new Redop({
 })
 ${TOOL_BODY};
 
-export default toVercel(app, { waitUntil });`,
+export default vercel(app, { waitUntil });`,
   },
   {
     id: "node",

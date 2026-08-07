@@ -3,7 +3,7 @@ title: Deploy to Production
 description: Choose the right production deployment shape for a Redop HTTP server and then follow a platform-specific guide.
 ---
 
-Redop is Bun-first. `.listen()` starts a long-running Bun HTTP server, which fits Railway, Fly.io, Docker, and similar always-on hosts. Cloudflare, Vercel, and Node use portable fetch adapters on top of the same MCP handler.
+Redop is runtime-agnostic. The same MCP app can run on Bun (`.listen()`), Node (`listenNode`), Cloudflare Workers (`cloudflare`), or Vercel (`vercel`).
 
 ## Choose a platform
 
@@ -21,7 +21,7 @@ Redop is Bun-first. `.listen()` starts a long-running Bun HTTP server, which fit
 
 - Use `http` for hosted MCP servers.
 - Bun default: bind to `0.0.0.0`, read `PORT`, expose `/mcp` via `.listen(...)`.
-- Adapter targets: export `toCloudflare(app)`, `toVercel(app)`, or `listenNode(app)`.
+- Adapter targets: export `cloudflare(app)`, `vercel(app)`, or call `listenNode(app)`.
 - Prefer MCP `2026-07-28` on serverless/edge.
 - If your platform wants a separate health route, enable one with `health: true` or `health: { path: "/health" }`.
 

@@ -19,7 +19,7 @@ Redop ships a first-class Cloudflare Workers adapter at `@redopjs/redop/cloudfla
 
 ```ts
 import { Redop } from "@redopjs/redop";
-import { toCloudflare } from "@redopjs/redop/cloudflare";
+import { cloudflare } from "@redopjs/redop/cloudflare";
 
 const app = new Redop({
   serverInfo: { name: "cf-mcp", version: "0.1.0" },
@@ -27,7 +27,7 @@ const app = new Redop({
   handler: async () => ({ ok: true }),
 });
 
-export default toCloudflare(app, { health: true });
+export default cloudflare(app, { health: true });
 ```
 
 ## Scaffold

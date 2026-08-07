@@ -1,9 +1,9 @@
 ---
 title: Welcome to Redop
-description: Redop is a Bun-first TypeScript framework for building production MCP servers with tools, resources, prompts, plugins, hooks, and HTTP or stdio transports.
+description: The runtime-agnostic TypeScript framework for production MCP servers — tools, resources, prompts, plugins, hooks, and HTTP or stdio transports on Bun, Node, Cloudflare, or Vercel.
 ---
 
-> Redop is a Bun-first TypeScript framework for building production MCP servers.
+> The runtime-agnostic framework for production MCP servers.
 
 <Frame>![Hero](/images/hero.png)</Frame>
 
@@ -59,7 +59,7 @@ Use it when you want to:
 - validate input with Zod, Standard Schema libraries, TypeBox, or JSON Schema
 - expose resources and prompts from the same server
 - add middleware, lifecycle hooks, and reusable plugins
-- run the same server over HTTP or stdio
+- run the same server over HTTP or stdio on Bun, Node, Cloudflare, or Vercel
 
 ## What Is an MCP Server?
 
@@ -74,20 +74,23 @@ In practice, that usually means:
 
 Redop gives you those primitives through one framework API instead of making you implement the protocol plumbing by hand.
 
-## Why Bun?
+## Runtimes
 
-Redop is Bun-first, which means the default developer experience assumes you are running your server with Bun.
+Define the app once. Host it where you need:
 
-Bun fits Redop well because it gives you:
-
-- a fast TypeScript-friendly runtime
-- a simple local development loop
-- a single toolchain for installing, running, and shipping the server
+| Runtime | How you start it |
+| ------- | ---------------- |
+| Bun (default local DX) | `app.listen(3000)` |
+| Cloudflare Workers | `export default cloudflare(app)` |
+| Vercel / Edge | `export default vercel(app, { waitUntil })` |
+| Node.js | `listenNode(app, { port: 3000 })` |
 
 ```sh
 bun add @redopjs/redop zod
 bun run --watch src/index.ts
 ```
+
+See [Runtime adapters](/reference/runtime-adapters) and [Deploy to Production](/guides/deploy/index).
 
 ---
 

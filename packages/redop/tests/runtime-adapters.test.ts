@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
-import { toCloudflare } from "../src/adapters/cloudflare";
-import { toVercel } from "../src/adapters/vercel";
-import { toNodeFetch } from "../src/adapters/node";
+import { cloudflare, toCloudflare } from "../src/adapters/cloudflare";
+import { vercel, toVercel } from "../src/adapters/vercel";
+import { nodeFetch, toNodeFetch } from "../src/adapters/node";
 import { Redop } from "../src/index";
 import { PROTOCOL_LATEST } from "../src/transports/protocol";
 
@@ -48,7 +48,7 @@ describe("runtime adapters", () => {
     expect(body.result.supportedVersions).toContain(PROTOCOL_LATEST);
   });
 
-  test("toCloudflare wires waitUntil for afterResponse", async () => {
+  test("cloudflare wires waitUntil for afterResponse", async () => {
     const pending: Promise<unknown>[] = [];
     let afterRan = false;
 
@@ -61,7 +61,7 @@ describe("runtime adapters", () => {
       },
     });
 
-    const worker = toCloudflare(app);
+    const worker = cloudflare(app);
     const response = await worker.fetch(
       new Request("http://localhost/mcp", {
         method: "POST",
@@ -92,7 +92,11 @@ describe("runtime adapters", () => {
     expect(afterRan).toBe(true);
   });
 
-  test("toVercel accepts an injected waitUntil", async () => {
+  test("toCloudflare remains an alias of cloudflare", () => {
+    expect(toCloudflare).toBe(cloudflare);
+  });
+
+  test("vercel accepts an injected waitUntil", async () => {
     const pending: Promise<unknown>[] = [];
     let afterRan = false;
 
@@ -105,7 +109,7 @@ describe("runtime adapters", () => {
       },
     });
 
-    const handler = toVercel(app, {
+    const handler = vercel(app, {
       waitUntil(promise) {
         pending.push(promise);
       },
@@ -135,9 +139,17 @@ describe("runtime adapters", () => {
     expect(afterRan).toBe(true);
   });
 
-  test("toNodeFetch mirrors app.handler", async () => {
+  test("toVercel remains an alias of vercel", () => {
+    expect(toVercel).toBe(vercel);
+  });
+
+  test("nodeFetch mirrors app.handler", async () => {
     const app = makeApp();
-    const { body } = await discover(toNodeFetch(app));
+    const { body } = await discover(nodeFetch(app));
     expect(body.result.serverInfo.name).toBe("adapter-test");
+  });
+
+  test("toNodeFetch remains an alias of nodeFetch", () => {
+    expect(toNodeFetch).toBe(nodeFetch);
   });
 });

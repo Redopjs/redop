@@ -158,9 +158,8 @@ export default function Home() {
               One MCP surface. Many runtimes.
             </h2>
             <p className="mx-auto mt-4 max-w-xl text-redop-muted text-sm leading-relaxed sm:text-base">
-              Bun stays the default long-running path. Portable adapters expose
-              the same handler to Cloudflare, Vercel, and Node without rewriting
-              your tools.
+              One definition. Bun for local and long-lived hosts; thin adapters
+              for Cloudflare, Vercel, and Node — without rewriting your tools.
             </p>
           </section>
 

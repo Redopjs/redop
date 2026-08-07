@@ -1,11 +1,11 @@
 ---
 title: Installation
-description: Install Redop in an existing Bun project or scaffold a starter MCP server with create-redop-app.
+description: Install Redop in an existing project or scaffold a starter MCP server with create-redop-app.
 ---
 
 Choose the path that matches your starting point:
 
-- install `@redopjs/redop` when you already have a Bun app
+- install `@redopjs/redop` when you already have a TypeScript app
 - use `create-redop-app` when you want a generated starter project
 
 ## Install Redop in an existing project
@@ -14,7 +14,7 @@ Choose the path that matches your starting point:
 bun add @redopjs/redop zod
 ```
 
-Redop is Bun-first. The examples, transport helpers, and starter projects assume you will run the server with Bun.
+Bun is the default local runtime (`.listen()`), but the same app deploys to Node, Cloudflare Workers, and Vercel through thin adapters. See [Runtime adapters](/reference/runtime-adapters).
 
 ## Scaffold a starter app
 
@@ -28,7 +28,7 @@ The interactive flow can generate:
 
 - an HTTP or stdio starter
 - tool, resource, and prompt examples
-- optional deploy presets for hosted HTTP projects
+- optional deploy presets for Bun hosts, Cloudflare, and Vercel
 
 ## What to do next
 

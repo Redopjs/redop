@@ -6,8 +6,8 @@
  */
 
 import { Redop } from "../src/index";
-import { toCloudflare } from "../src/cloudflare";
-import { toVercel } from "../src/vercel";
+import { cloudflare } from "../src/cloudflare";
+import { vercel } from "../src/vercel";
 import { listenNode } from "../src/node";
 
 const app = new Redop({
@@ -21,15 +21,15 @@ const app = new Redop({
 });
 
 // Cloudflare Workers:
-// export default toCloudflare(app, { health: true });
+// export default cloudflare(app, { health: true });
 
 // Vercel / Edge (pass waitUntil from @vercel/functions in production):
-// export default toVercel(app, { health: true, waitUntil });
+// export default vercel(app, { health: true, waitUntil });
 
 // Node long-lived process:
 if (import.meta.main) {
-  void toCloudflare;
-  void toVercel;
+  void cloudflare;
+  void vercel;
   listenNode(app, {
     port: Number(process.env.PORT ?? 3000),
     hostname: "0.0.0.0",
