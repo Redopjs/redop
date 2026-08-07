@@ -12,7 +12,7 @@ Redop ships a first-class Cloudflare Workers adapter at `@redopjs/redop/cloudfla
 | Recommended for built-in Bun `.listen()` | no — use the adapter |
 | Recommended protocol | MCP `2026-07-28` (stateless) |
 | `create-redop-app` preset | `--deploy cloudflare` |
-| Generated files | `wrangler.toml`, adapter entry in `src/index.ts` |
+| Generated files | `wrangler.jsonc`, adapter entry in `src/index.ts` |
 | `afterResponse` | wired through `ctx.waitUntil` |
 
 ## Minimal worker
@@ -29,15 +29,44 @@ const app = new Redop({
 export default cloudflare(app, { health: true });
 ```
 
-## Scaffold
+## Wrangler config
+
+`create-redop-app --deploy cloudflare` writes a `wrangler.jsonc` like this:
+
+```jsonc
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "my-cf-mcp",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-07",
+  "compatibility_flags": ["nodejs_compat"]
+}
+```
+
+| Field | Purpose |
+| ----- | ------- |
+| `main` | Worker entry — Redop's `cloudflare(app)` default export |
+| `compatibility_date` | Workers runtime feature set |
+| `compatibility_flags` | `nodejs_compat` for Node-built-ins some MCP tooling expects |
+
+Local and production both use this file:
 
 ```sh
-bunx create-redop-app my-cf-mcp --transport http --deploy cloudflare
 bunx wrangler dev
 bunx wrangler deploy
 ```
 
-The preset writes `wrangler.toml` with `main = "src/index.ts"` and a `dev` script of `wrangler dev`. Wrangler uses that entry for both local and deploy.
+## Scaffold
+
+```sh
+bunx create-redop-app my-cf-mcp --transport http --deploy cloudflare
+cd my-cf-mcp
+bun install
+bun run dev
+```
+
+The preset also sets `"dev": "wrangler dev"` and `"deploy": "wrangler deploy"` in `package.json`.
+
 ## Capability notes
 
 - Prefer stateless MCP (`2026-07-28`). Avoid relying on in-memory sessions or long-lived SSE across isolates.
