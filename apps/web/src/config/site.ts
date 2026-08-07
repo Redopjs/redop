@@ -5,7 +5,7 @@ const url =
 
 export const siteConfig = {
   description:
-    "The runtime-agnostic framework for production MCP servers. Define tools, resources, and prompts once — deploy on Bun, Node, Cloudflare, or Vercel.",
+    "The runtime-agnostic framework for production MCP servers. Define tools, resources, and prompts once, then deploy on Bun, Node, Cloudflare, or Vercel.",
   name: "Redop",
   ogImage: `${url}/og.png`,
   tagline: "The runtime-agnostic framework for production MCP servers",

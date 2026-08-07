@@ -107,7 +107,7 @@ export default function Home() {
               </Link>
             </div>
 
-            <div className="fade-rise fade-rise-delay-3 mt-12 w-full max-w-3xl sm:mt-14">
+            <div className="fade-rise fade-rise-delay-3 mt-12 w-full max-w-4xl sm:mt-14">
               <RuntimeCode />
             </div>
           </section>
@@ -159,8 +159,8 @@ export default function Home() {
             </h2>
             <p className="mx-auto mt-4 max-w-xl text-redop-muted text-sm leading-relaxed sm:text-base">
               Bun stays the default long-running path. Portable adapters expose
-              the same handler to Cloudflare, Vercel, and Node — without
-              rewriting your tools.
+              the same handler to Cloudflare, Vercel, and Node without rewriting
+              your tools.
             </p>
           </section>
 
