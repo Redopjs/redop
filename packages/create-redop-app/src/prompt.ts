@@ -139,6 +139,7 @@ export async function runPrompts(
             { value: "railway", label: "Railway" },
             { value: "fly-io", label: "Fly.io" },
             { value: "vercel", label: "Vercel" },
+            { value: "cloudflare", label: "Cloudflare Workers" },
           ],
         });
       },

@@ -8,6 +8,11 @@ Redop currently supports two transports:
 - `http`
 - `stdio`
 
+HTTP can run as:
+
+- Bun `.listen(...)` (default long-running server)
+- a portable `app.handler()` fetch function via runtime adapters (Cloudflare, Vercel, Node)
+
 ## How transport selection works
 
 - `listen(3000)` defaults to HTTP

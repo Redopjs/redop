@@ -1,0 +1,42 @@
+---
+title: Deploy on Node.js
+description: Run Redop on a long-lived Node.js process with the Node adapter.
+---
+
+Bun remains the default for `.listen()`. When you need Node specifically, use `@redopjs/redop/node`.
+
+## Quick start
+
+```ts
+import { Redop } from "@redopjs/redop";
+import { listenNode } from "@redopjs/redop/node";
+
+const app = new Redop({
+  serverInfo: { name: "node-mcp", version: "0.1.0" },
+}).tool("ping", {
+  handler: async () => ({ ok: true }),
+});
+
+listenNode(app, {
+  port: Number(process.env.PORT ?? 3000),
+  hostname: "0.0.0.0",
+  health: true,
+  onListen: ({ url }) => console.log(`Redop on ${url}`),
+});
+```
+
+## Other Node shapes
+
+- `toNodeListener(app)` / `toNodeHandler(app)` — attach to an existing `node:http` server
+- `toNodeFetch(app)` — portable `(Request) => Response` for undici-style hosts
+
+## Notes
+
+- Node is a long-lived runtime, so `afterResponse` uses microtasks (same model as Bun).
+- Sessioned MCP and SSE work the same as the Bun HTTP transport on a single process.
+- For Cloudflare or Vercel, use those adapters instead of the Node listener.
+
+## Next
+
+- [Deploy to Production overview](/guides/deploy/index)
+- [Runtime adapters reference](/reference/runtime-adapters)

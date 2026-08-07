@@ -208,3 +208,12 @@ export interface ListenOptions {
   /** Transport kind. @default "http" when `port` is set, otherwise "stdio" */
   transport?: TransportKind;
 }
+
+/**
+ * Options for `app.handler()` and runtime adapters.
+ * Same HTTP behavior as `.listen(...)`, without process/server bind fields.
+ */
+export type HandlerOptions = Pick<
+  ListenOptions,
+  "cors" | "debug" | "health" | "maxBodySize" | "path" | "sessionTimeout" | "listCache"
+>;

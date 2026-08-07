@@ -35,55 +35,95 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --background: #0b0b0c;
+  --foreground: #f4f4f5;
+
+  --redop-primary: #f03603;
+  --redop-deep: #9f261e;
+  --redop-accent: #f05a47;
+  --redop-soft: #fde9e6;
+  --redop-ink: #f4f4f5;
+  --redop-warm: #0b0b0c;
+  --redop-panel: #121214;
+  --redop-border: rgb(244 244 245 / 12%);
+  --redop-grid: rgb(244 244 245 / 12%);
+  --redop-muted: rgb(244 244 245 / 58%);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  --background: #0b0b0c;
+  --foreground: #f4f4f5;
+  --card: #121214;
+  --card-foreground: #f4f4f5;
+  --popover: #121214;
+  --popover-foreground: #f4f4f5;
+  --primary: #f4f4f5;
+  --primary-foreground: #0b0b0c;
+  --secondary: #1a1a1c;
+  --secondary-foreground: #f4f4f5;
+  --muted: #1a1a1c;
+  --muted-foreground: #a1a1aa;
+  --accent: #1a1a1c;
+  --accent-foreground: #f4f4f5;
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --border: rgb(244 244 245 / 10%);
+  --input: rgb(244 244 245 / 14%);
+  --ring: #a1a1aa;
   --chart-1: oklch(0.809 0.105 251.813);
   --chart-2: oklch(0.623 0.214 259.815);
   --chart-3: oklch(0.546 0.245 262.881);
   --chart-4: oklch(0.488 0.243 264.376);
   --chart-5: oklch(0.424 0.199 265.638);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar: #121214;
+  --sidebar-foreground: #f4f4f5;
+  --sidebar-primary: #f03603;
+  --sidebar-primary-foreground: #f4f4f5;
+  --sidebar-accent: #1a1a1c;
+  --sidebar-accent-foreground: #f4f4f5;
+  --sidebar-border: rgb(244 244 245 / 10%);
+  --sidebar-ring: #a1a1aa;
+
+  --redop-primary: #ff5a2f;
+  --redop-deep: #f05a47;
+  --redop-accent: #ff7a5c;
+  --redop-soft: #241512;
+  --redop-ink: #f4f4f5;
+  --redop-warm: #0b0b0c;
+  --redop-panel: #121214;
+  --redop-border: rgb(244 244 245 / 12%);
+  --redop-grid: rgb(244 244 245 / 12%);
+  --redop-muted: rgb(244 244 245 / 58%);
+}
+
+:root:not(.dark) {
+  --background: #f7f7f8;
+  --foreground: #111113;
+
+  --redop-primary: #f03603;
+  --redop-deep: #9f261e;
+  --redop-accent: #f05a47;
+  --redop-soft: #fde9e6;
+  --redop-ink: #111113;
+  --redop-warm: #f7f7f8;
+  --redop-panel: #ffffff;
+  --redop-border: rgb(17 17 19 / 10%);
+  --redop-grid: rgb(17 17 19 / 10%);
+  --redop-muted: rgb(17 17 19 / 58%);
 }
 
 @theme inline {
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);
-  --color-redop-primary: #f03603;
-  --color-redop-deep: #9f261e;
-  --color-redop-accent: #f05a47;
-  --color-redop-soft: #fde9e6;
-  --color-redop-ink: #151110;
-  --color-redop-warm: #ffffff;
-  --color-redop-panel: #ffffff;
-  --color-redop-border: #e8dfda;
+  --color-redop-primary: var(--redop-primary);
+  --color-redop-deep: var(--redop-deep);
+  --color-redop-accent: var(--redop-accent);
+  --color-redop-soft: var(--redop-soft);
+  --color-redop-ink: var(--redop-ink);
+  --color-redop-warm: var(--redop-warm);
+  --color-redop-panel: var(--redop-panel);
+  --color-redop-border: var(--redop-border);
+  --color-redop-grid: var(--redop-grid);
+  --color-redop-muted: var(--redop-muted);
 
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -134,5 +174,34 @@
   }
   html {
     @apply font-sans;
+  }
+}
+
+@layer utilities {
+  .fade-rise {
+    animation: fade-rise 700ms ease both;
+  }
+
+  .fade-rise-delay-1 {
+    animation-delay: 90ms;
+  }
+
+  .fade-rise-delay-2 {
+    animation-delay: 160ms;
+  }
+
+  .fade-rise-delay-3 {
+    animation-delay: 240ms;
+  }
+}
+
+@keyframes fade-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }

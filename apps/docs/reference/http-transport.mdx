@@ -61,5 +61,6 @@ For older protocol versions:
 
 ## Current caveats
 
-- `tls` changes the reported URL scheme, but the transport does not currently boot Bun TLS from that option
+- `tls` is passed through to Bun.serve when using `.listen()`; portable adapters do not terminate TLS themselves
 - `cors` is handled by a simple built-in response instead of the full typed `CorsOptions` policy surface
+- serverless/edge adapters prefer MCP `2026-07-28`; long-lived SSE and in-memory sessions are limited there

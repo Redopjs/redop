@@ -55,7 +55,7 @@ For a hosted server, the MCP endpoint will be available at `http://localhost:300
 - Global middleware and lifecycle hooks across tools, resources, and prompts.
 - Reusable plugins with typed request context.
 - Explicit feature-module composition with `.use(...)`.
-- HTTP and stdio transports from one API.
+- HTTP and stdio transports from one API, plus portable fetch adapters for Cloudflare, Vercel, and Node.
 - MCP `2026-07-28` support: stateless HTTP, `server/discover`, header routing, list cache hints, MRTR (`requireInput`), and the tasks extension.
 - Post-response hooks for analytics, logging, and other best-effort work.
 - Built-in auth and logging plugins.
@@ -70,9 +70,34 @@ Redop is built around a small set of explicit primitives:
 - `.prompt(...)` registers reusable prompt material.
 - `.middleware(...)` wraps execution.
 - `.use(...)` composes feature modules or plugins.
-- `.listen(...)` starts HTTP or stdio transport.
+- `.listen(...)` starts HTTP or stdio transport (Bun default for HTTP).
+- `.handler(...)` returns a portable fetch handler for Cloudflare, Vercel, Node, and similar runtimes.
 
 Redop does not rely on file-system routing. You compose MCP surface area directly in code.
+
+## Runtime adapters
+
+Bun `.listen()` remains the default. For other runtimes:
+
+```ts
+import { Redop } from "@redopjs/redop";
+import { toCloudflare } from "@redopjs/redop/cloudflare";
+import { toVercel } from "@redopjs/redop/vercel";
+import { listenNode } from "@redopjs/redop/node";
+
+const app = new Redop({ serverInfo: { name: "demo", version: "0.1.0" } });
+
+// Cloudflare Workers
+export default toCloudflare(app);
+
+// Vercel / Edge (pass waitUntil in serverless)
+// export default toVercel(app, { waitUntil });
+
+// Node.js
+// listenNode(app, { port: 3000, hostname: "0.0.0.0" });
+```
+
+Package exports: `@redopjs/redop/cloudflare`, `@redopjs/redop/vercel`, `@redopjs/redop/node`.
 
 ## Tools, resources, and prompts
 

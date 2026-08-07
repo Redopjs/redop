@@ -19,3 +19,14 @@ await buildOrExit("server", {
   outdir: "./dist",
   target: "bun",
 });
+
+await buildOrExit("adapters", {
+  entrypoints: [
+    "./src/cloudflare.ts",
+    "./src/vercel.ts",
+    "./src/node.ts",
+  ],
+  outdir: "./dist",
+  target: "node",
+  external: ["bun", "@vercel/functions"],
+});

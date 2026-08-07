@@ -1,5 +1,5 @@
 export const TRANSPORTS = ["http", "stdio"] as const;
-export const DEPLOY_TARGETS = ["none", "railway", "fly-io", "vercel"] as const;
+export const DEPLOY_TARGETS = ["none", "railway", "fly-io", "vercel", "cloudflare"] as const;
 export const COMPONENTS = ["tools", "resources", "prompts"] as const;
 export const SCHEMA_LIBRARIES = [
   "zod",

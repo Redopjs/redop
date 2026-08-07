@@ -3,32 +3,31 @@ title: Deploy to Production
 description: Choose the right production deployment shape for a Redop HTTP server and then follow a platform-specific guide.
 ---
 
-Redop HTTP is a long-running Bun server. That means the best production fit today is a platform that runs a persistent Bun process, not a purely serverless request model.
+Redop is Bun-first. `.listen()` starts a long-running Bun HTTP server, which fits Railway, Fly.io, Docker, and similar always-on hosts. Cloudflare, Vercel, and Node use portable fetch adapters on top of the same MCP handler.
 
 ## Choose a platform
 
 | Platform | Best for | Recommended transport | `create-redop-app` preset | Fit today |
 | -------- | -------- | --------------------- | ------------------------- | --------- |
-| Railway | Fastest hosted setup | `http` | `railway` | Recommended |
-| Fly.io | Always-on Docker deployment | `http` | `fly-io` | Recommended |
-| Docker | Self-hosting or custom infra | `http` | `fly-io` gives you a starting Dockerfile | Recommended |
-| Unkey | Docker deployment with preview environments, rollbacks, and Sentinel | `http` | none | Private beta |
-| Vercel | Custom constrained setups | not recommended for the built-in HTTP transport | `vercel` | Caveat only |
+| Railway | Fastest hosted Bun setup | `http` + `.listen()` | `railway` | Recommended |
+| Fly.io | Always-on Docker deployment | `http` + `.listen()` | `fly-io` | Recommended |
+| Docker | Self-hosting or custom infra | `http` + `.listen()` | `fly-io` gives you a starting Dockerfile | Recommended |
+| Unkey | Docker deployment with preview environments, rollbacks, and Sentinel | `http` + `.listen()` | none | Private beta |
+| Node.js | Long-lived Node hosts | `http` via `@redopjs/redop/node` | none | Supported |
+| Cloudflare Workers | Edge/stateless MCP | fetch adapter | `cloudflare` | Supported (stateless) |
+| Vercel / Edge | Function/stateless MCP | fetch adapter | `vercel` | Supported (stateless) |
 
 ## Redop hosting model
 
 - Use `http` for hosted MCP servers.
-- Bind to `0.0.0.0`.
-- Read `PORT` from the environment.
-- Expose the MCP endpoint at `/mcp`.
-- Do not assume Redop mounts `/mcp/health` or `/mcp/schema` by default.
-- If your platform wants a separate health route, enable one explicitly with `health: true` or `health: { path: "/health" }`.
+- Bun default: bind to `0.0.0.0`, read `PORT`, expose `/mcp` via `.listen(...)`.
+- Adapter targets: export `toCloudflare(app)`, `toVercel(app)`, or `listenNode(app)`.
+- Prefer MCP `2026-07-28` on serverless/edge.
+- If your platform wants a separate health route, enable one with `health: true` or `health: { path: "/health" }`.
 
-`stdio` is for local MCP host integrations such as command-based clients. It is not the normal production path for a hosted Redop HTTP server.
+`stdio` is for local MCP host integrations. It is not the normal production path for a hosted Redop HTTP server.
 
 ## Quick verification shape
-
-No matter which platform you choose, a healthy Redop deployment should answer an MCP `initialize` request on `/mcp`.
 
 ```sh
 curl -i -X POST http://localhost:3000/mcp \
@@ -36,14 +35,22 @@ curl -i -X POST http://localhost:3000/mcp \
   --data '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"manual-check","version":"1.0.0"}}}'
 ```
 
-You should get a JSON-RPC response with `result.protocolVersion`, `serverInfo`, and capabilities.
+For serverless/edge, prefer:
 
-If you keep testing manually after `initialize`, copy the `Mcp-Session-Id` response header into later HTTP requests. Redop expects that header on follow-up JSON-RPC calls.
+```sh
+curl -i -X POST https://your-host/mcp \
+  -H 'Content-Type: application/json' \
+  -H 'MCP-Protocol-Version: 2026-07-28' \
+  -H 'Mcp-Method: server/discover' \
+  --data '{"jsonrpc":"2.0","id":0,"method":"server/discover","params":{}}'
+```
 
 ## Recommended paths
 
-- Choose [Deploy to Railway](/guides/deploy/railway) if you want the shortest path to a hosted Bun service.
-- Choose [Deploy to Fly.io](/guides/deploy/fly-io) if you want Docker-based deployment with an always-on app shape.
-- Choose [Deploy with Docker](/guides/deploy/docker) if you want to run Redop on your own infra or in a monorepo.
-- Choose [Deploy to Unkey](/guides/deploy/unkey) if you already have Unkey Deploy beta access and want Docker-based deploys with preview environments and built-in edge controls.
-- Read [Deploy to Vercel](/guides/deploy/vercel) only if you specifically need Vercel and understand the built-in transport caveat.
+- [Deploy to Railway](/guides/deploy/railway) for the shortest hosted Bun path
+- [Deploy to Fly.io](/guides/deploy/fly-io) for Docker always-on
+- [Deploy with Docker](/guides/deploy/docker) for self-hosting
+- [Deploy on Node.js](/guides/deploy/node) for long-lived Node
+- [Deploy to Cloudflare Workers](/guides/deploy/cloudflare) for Workers
+- [Deploy to Vercel](/guides/deploy/vercel) for Vercel / Edge
+- [Runtime adapters reference](/reference/runtime-adapters)

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "@/styles/globals.css";
+import { ThemeProvider } from "@/components/theme-provider";
 import { SITE_KEYWORDS, siteConfig } from "@/config/site";
 import { cn } from "@/lib/utils";
 import { geistMono, geistSans } from "@/styles/fonts";
@@ -61,10 +62,15 @@ export const metadata: Metadata = {
 export const viewport = {
   initialScale: 1,
   maximumScale: 1,
-  themeColor: [{ media: "(prefers-color-scheme: light)" }],
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f7f7f8" },
+    { media: "(prefers-color-scheme: dark)", color: "#0b0b0c" },
+  ],
   userScalable: false,
   width: "device-width",
 };
+
+const themeInitScript = `(function(){try{var k='redop-theme';var s=localStorage.getItem(k);var t=s==='light'||s==='dark'?s:'dark';var r=document.documentElement;r.classList.toggle('dark',t==='dark');r.style.colorScheme=t;}catch(e){}})();`;
 
 export default function RootLayout({
   children,
@@ -72,7 +78,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+      </head>
       <body
         className={cn(
           geistMono.variable,
@@ -80,7 +89,7 @@ export default function RootLayout({
           "font-sans antialiased"
         )}
       >
-        {children}
+        <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>
   );

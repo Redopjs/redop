@@ -18,23 +18,25 @@ bunx create-redop-app my-redop-app --transport http --deploy railway
 
 ## Deploy presets
 
-- `none` for manual setup
+- `none` for manual Bun setup
 - `railway` for hosted Bun services
 - `fly-io` for Docker-based deployment
-- `vercel` as a starting point only
+- `vercel` for Vercel via `@redopjs/redop/vercel`
+- `cloudflare` for Cloudflare Workers via `@redopjs/redop/cloudflare`
 
 ## Generated files by preset
 
-| Preset | Extra files |
-| ------ | ----------- |
-| `none` | none |
-| `railway` | none |
+| Preset | Extra files / entry |
+| ------ | ------------------- |
+| `none` | `src/index.ts` with `.listen()` |
+| `railway` | `src/index.ts` with `.listen()` |
 | `fly-io` | `Dockerfile`, `fly.toml` |
-| `vercel` | `vercel.json` |
+| `vercel` | `api/index.ts` adapter entry, `vercel.json` |
+| `cloudflare` | `src/index.ts` adapter entry, `wrangler.toml` |
 
 ## Good default
 
-If you are unsure, start with `--transport http --deploy railway` for hosted work or `--transport stdio` for local client integrations.
+If you are unsure, start with `--transport http --deploy railway` for hosted Bun work or `--transport stdio` for local client integrations. Use `vercel` / `cloudflare` when you specifically want those platforms and can stick to stateless MCP.
 
 ## Deployment guides
 
@@ -42,5 +44,8 @@ If you are unsure, start with `--transport http --deploy railway` for hosted wor
 - [Deploy to Railway](/guides/deploy/railway)
 - [Deploy to Fly.io](/guides/deploy/fly-io)
 - [Deploy with Docker](/guides/deploy/docker)
+- [Deploy on Node.js](/guides/deploy/node)
 - [Deploy to Unkey](/guides/deploy/unkey)
+- [Deploy to Cloudflare Workers](/guides/deploy/cloudflare)
 - [Deploy to Vercel](/guides/deploy/vercel)
+- [Runtime adapters](/reference/runtime-adapters)

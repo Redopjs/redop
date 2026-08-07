@@ -92,7 +92,8 @@ Redop still accepts top-level `name`, `title`, `version`, `description`, `icons`
 | `onAfterResponse(fn)` | Observe tool, resource, and prompt executions after the response is written. |
 | `onError(fn)` | Observe thrown errors from middleware or handlers. |
 | `notifyResourceChanged(uri)` | Push `resources/updated` notifications to subscribed clients. |
-| `listen()` / `listen(3000)` / `listen(opts)` | Start the HTTP or stdio transport. |
+| `handler(opts?)` | Return a portable fetch handler for Cloudflare, Vercel, Node, and other runtimes. |
+| `listen()` / `listen(3000)` / `listen(opts)` | Start the HTTP or stdio transport. Bun is required for HTTP `.listen()`. |
 
 ## Introspection
 

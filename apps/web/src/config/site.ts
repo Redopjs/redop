@@ -5,43 +5,26 @@ const url =
 
 export const siteConfig = {
   description:
-    "Bun-native TypeScript framework for building production MCP servers.",
+    "The runtime-agnostic framework for production MCP servers. Define tools, resources, and prompts once, then deploy on Bun, Node, Cloudflare, or Vercel.",
   name: "Redop",
   ogImage: `${url}/og.png`,
-  title: "Redop | Bun-native MCP Framework",
+  tagline: "The runtime-agnostic framework for production MCP servers",
+  title: "Redop | Runtime-agnostic MCP Framework",
   url,
 };
 
 export const SITE_KEYWORDS = [
-  // Core product
   "MCP tools",
   "MCP server",
-  "tool directory",
-  "AI tools",
-  "agent tools",
-
-  // Technology
   "Model Context Protocol",
   "MCP",
   "LLM tools",
   "AI agents",
-  "agentic AI",
-
-  // Developer audience
-  "developer tools",
-  "API tools",
-  "SDK",
   "TypeScript",
   "Bun",
-
-  // Use case
-  "tool search",
-  "tool discovery",
-  "AI integrations",
-  "agent integrations",
-  "workflow automation",
-
-  // Brand
+  "Cloudflare Workers",
+  "Vercel",
+  "Node.js",
+  "runtime adapters",
   "UseAgents",
-  "useagents.dev",
 ];
