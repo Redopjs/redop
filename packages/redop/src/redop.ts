@@ -1616,7 +1616,11 @@ export class Redop<C extends Record<string, unknown> = {}> {
       args: Record<string, string> | undefined,
       req: RequestMeta
     ) => this._executePrompt(name, args, req);
-    const transport = opts.transport ?? (opts.port ? "http" : "stdio");
+    const transport =
+      opts.transport ??
+      (opts.port !== undefined && opts.port !== null && opts.port !== ""
+        ? "http"
+        : "stdio");
 
     if (transport === "stdio") {
       startStdioTransport(

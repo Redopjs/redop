@@ -12,14 +12,13 @@ Redop ships a first-class Cloudflare Workers adapter at `@redopjs/redop/cloudfla
 | Recommended for built-in Bun `.listen()` | no — use the adapter |
 | Recommended protocol | MCP `2026-07-28` (stateless) |
 | `create-redop-app` preset | `--deploy cloudflare` |
-| Generated files | `wrangler.toml`, adapter entry in `src/index.ts` |
+| Generated files | `wrangler.jsonc`, adapter entry in `src/index.ts` |
 | `afterResponse` | wired through `ctx.waitUntil` |
 
 ## Minimal worker
 
 ```ts
-import { Redop } from "@redopjs/redop";
-import { cloudflare } from "@redopjs/redop/cloudflare";
+import { Redop, cloudflare } from "@redopjs/redop/cloudflare";
 
 const app = new Redop({
   serverInfo: { name: "cf-mcp", version: "0.1.0" },
@@ -30,12 +29,43 @@ const app = new Redop({
 export default cloudflare(app, { health: true });
 ```
 
+## Wrangler config
+
+`create-redop-app --deploy cloudflare` writes a `wrangler.jsonc` like this:
+
+```jsonc
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "my-cf-mcp",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-07",
+  "compatibility_flags": ["nodejs_compat"]
+}
+```
+
+| Field | Purpose |
+| ----- | ------- |
+| `main` | Worker entry — Redop's `cloudflare(app)` default export |
+| `compatibility_date` | Workers runtime feature set |
+| `compatibility_flags` | `nodejs_compat` for Node-built-ins some MCP tooling expects |
+
+Local and production both use this file:
+
+```sh
+bunx wrangler dev
+bunx wrangler deploy
+```
+
 ## Scaffold
 
 ```sh
 bunx create-redop-app my-cf-mcp --transport http --deploy cloudflare
-bunx wrangler deploy
+cd my-cf-mcp
+bun install
+bun run dev
 ```
+
+The preset also sets `"dev": "wrangler dev"` and `"deploy": "wrangler deploy"` in `package.json`.
 
 ## Capability notes
 

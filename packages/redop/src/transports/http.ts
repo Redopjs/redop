@@ -2,7 +2,6 @@
 //  redop — Bun HTTP transport (Bun.serve wrapper)
 // ─────────────────────────────────────────────
 
-import { serve } from "bun";
 import type {
   CapabilityOptions,
   ListenOptions,
@@ -29,11 +28,26 @@ export type {
 } from "./http-app";
 export { createHttpApp } from "./http-app";
 
+type BunServe = typeof Bun.serve;
+
+function getBunServe(): BunServe {
+  const bun = (globalThis as { Bun?: { serve: BunServe } }).Bun;
+  if (!bun?.serve) {
+    throw new Error(
+      "[redop] HTTP `.listen()` requires the Bun runtime. For Cloudflare, Vercel, or Node, use `app.handler()` or `@redopjs/redop/cloudflare` / `@redopjs/redop/vercel` / `@redopjs/redop/node`."
+    );
+  }
+  return bun.serve.bind(bun) as BunServe;
+}
+
 /**
  * Start the built-in Bun HTTP transport.
  *
  * Prefer `app.listen(...)` from application code. Runtime adapters should use
  * `createHttpApp` / `app.handler()` instead of this helper.
+ *
+ * Bun is resolved from `globalThis` at call time so Workers/edge bundles that
+ * never call `.listen()` do not evaluate `Bun.serve` at module load.
  */
 export function startHttpTransport(
   tools: Map<string, ResolvedTool>,
@@ -76,6 +90,7 @@ export function startHttpTransport(
   serverInfo: Required<ServerInfoOptions>,
   caps: Required<CapabilityOptions>
 ): TransportHandle {
+  const serve = getBunServe();
   const port = Number(opts.port ?? 3000);
   const hostname = opts.hostname ?? "127.0.0.1";
   const mcpPath = opts.path ?? "/mcp";
@@ -108,8 +123,9 @@ export function startHttpTransport(
     },
   });
 
-  const listenUrl = `http${opts.tls ? "s" : ""}://${hostname}:${port}${mcpPath}`;
-  opts.onListen?.({ hostname, port, url: listenUrl });
+  const boundPort = server.port ?? port;
+  const listenUrl = `http${opts.tls ? "s" : ""}://${hostname}:${boundPort}${mcpPath}`;
+  opts.onListen?.({ hostname, port: boundPort, url: listenUrl });
 
   return {
     push(sessionId, payload, options) {

@@ -48,7 +48,7 @@ function renderPackageJson(options: ResolvedOptions) {
     typecheck: "tsc --noEmit",
   };
   if (isCloudflare) {
-    scripts.dev = "wrangler dev src/index.ts";
+    scripts.dev = "wrangler dev";
     scripts.deploy = "wrangler deploy";
   } else if (isVercel) {
     scripts.dev = "vercel dev";
@@ -265,8 +265,7 @@ ${chain}
 
   if (options.deploy === "vercel") {
     return `
-import { Redop } from "@redopjs/redop";
-import { vercel } from "@redopjs/redop/vercel";
+import { Redop, vercel } from "@redopjs/redop/vercel";
 import { waitUntil } from "@vercel/functions";
 ${schemaBlock}
 const app = new Redop({
@@ -286,8 +285,7 @@ export default vercel(app, {
 
   if (options.deploy === "cloudflare") {
     return `
-import { Redop } from "@redopjs/redop";
-import { cloudflare } from "@redopjs/redop/cloudflare";
+import { Redop, cloudflare } from "@redopjs/redop/cloudflare";
 ${schemaBlock}
 const app = new Redop({
   serverInfo: {
@@ -364,12 +362,15 @@ function renderVercelJson() {
   );
 }
 
-function renderWranglerToml(options: ResolvedOptions) {
+function renderWranglerJsonc(options: ResolvedOptions) {
   const name = toPackageName(options.appName);
-  return `name = "${name}"
-main = "src/index.ts"
-compatibility_date = "2026-03-01"
-compatibility_flags = ["nodejs_compat"]
+  return `{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "${name}",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-07",
+  "compatibility_flags": ["nodejs_compat"]
+}
 `;
 }
 
@@ -438,7 +439,10 @@ Step-by-step guide:
 
 This starter uses \`@redopjs/redop/cloudflare\` and wires \`ctx.waitUntil\` for \`afterResponse\`. Prefer MCP \`2026-07-28\` (stateless).
 
+Local config lives in \`wrangler.jsonc\` (\`main\` points at \`src/index.ts\`).
+
 \`\`\`sh
+bun run dev
 bunx wrangler deploy
 \`\`\`
 
@@ -561,8 +565,8 @@ export function buildFiles(options: ResolvedOptions): GeneratedFile[] {
 
   if (options.deploy === "cloudflare") {
     files.push({
-      content: renderWranglerToml(options),
-      path: "wrangler.toml",
+      content: renderWranglerJsonc(options),
+      path: "wrangler.jsonc",
     });
   }
 

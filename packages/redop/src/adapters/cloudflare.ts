@@ -24,10 +24,12 @@ export type CloudflareFetchHandler = (
  * Prefer MCP `2026-07-28` (stateless) on Workers. Long-lived SSE / in-memory
  * sessions are not a good fit for the Workers request model.
  *
+ * The underlying HTTP app is created on the first request so module evaluation
+ * stays free of Workers-disallowed global timers.
+ *
  * @example
  * ```ts
- * import { Redop } from "@redopjs/redop"
- * import { cloudflare } from "@redopjs/redop/cloudflare"
+ * import { Redop, cloudflare } from "@redopjs/redop/cloudflare"
  *
  * const app = new Redop({ serverInfo: { name: "cf-mcp", version: "0.1.0" } })
  *   .tool("ping", { handler: async () => ({ ok: true }) })
@@ -39,10 +41,13 @@ export function cloudflare(
   app: Redop,
   opts: HandlerOptions = {}
 ): { fetch: CloudflareFetchHandler } {
-  const handler = app.handler(opts);
+  let handler: HttpFetch | null = null;
 
   return {
     fetch(request, _env, ctx) {
+      if (!handler) {
+        handler = app.handler(opts);
+      }
       const runtime: FetchRuntime = {
         waitUntil(promise) {
           ctx.waitUntil(promise);

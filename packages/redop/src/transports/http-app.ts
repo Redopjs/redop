@@ -130,34 +130,54 @@ function createStore(sessionTimeoutMs: number) {
   const sessions = new Map<string, { lastSeen: number }>();
   const tasks = new Map<string, StoredTask>();
 
-  const timer = setInterval(() => {
-    const now = Date.now();
-    for (const [id, s] of sessions) {
-      if (now - s.lastSeen > sessionTimeoutMs) {
-        sessions.delete(id);
-      }
+  // Cloudflare Workers forbid timers at module top-level. Start the sweeper
+  // lazily on first use (typically the first request) instead.
+  let timer: ReturnType<typeof setInterval> | null = null;
+
+  const ensureTimer = () => {
+    if (timer !== null || sessionTimeoutMs <= 0) {
+      return;
     }
-    for (const [, t] of tasks) {
-      if (t.ttl === null) {
-        continue;
-      }
-      if (now - new Date(t.createdAt).getTime() > t.ttl) {
-        for (const w of t.waiters) {
-          w();
+    timer = setInterval(() => {
+      const now = Date.now();
+      for (const [id, s] of sessions) {
+        if (now - s.lastSeen > sessionTimeoutMs) {
+          sessions.delete(id);
         }
-        tasks.delete(t.taskId);
       }
+      for (const [, t] of tasks) {
+        if (t.ttl === null) {
+          continue;
+        }
+        if (now - new Date(t.createdAt).getTime() > t.ttl) {
+          for (const w of t.waiters) {
+            w();
+          }
+          tasks.delete(t.taskId);
+        }
+      }
+    }, 30_000);
+
+    if (
+      typeof timer === "object" &&
+      timer !== null &&
+      "unref" in timer &&
+      typeof timer.unref === "function"
+    ) {
+      timer.unref();
     }
-  }, 30_000);
+  };
 
   return {
     sessions: {
       create() {
+        ensureTimer();
         const id = crypto.randomUUID();
         sessions.set(id, { lastSeen: Date.now() });
         return id;
       },
       touch(id: string) {
+        ensureTimer();
         const s = sessions.get(id);
         if (!s) {
           return false;
@@ -177,6 +197,7 @@ function createStore(sessionTimeoutMs: number) {
     },
     tasks: {
       create(ttl?: number): StoredTask {
+        ensureTimer();
         const now = isoNow();
         const t: StoredTask = {
           taskId: crypto.randomUUID(),
@@ -325,7 +346,10 @@ function createStore(sessionTimeoutMs: number) {
       },
     },
     stop() {
-      clearInterval(timer);
+      if (timer !== null) {
+        clearInterval(timer);
+        timer = null;
+      }
     },
   };
 }

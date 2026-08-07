@@ -186,9 +186,12 @@ describe("Generator Logic", () => {
 
     await generateProject(options);
 
-    expect(await exists(path.join(TEST_DIR, "wrangler.toml"))).toBe(true);
+    expect(await exists(path.join(TEST_DIR, "wrangler.jsonc"))).toBe(true);
     const source = await readFile(path.join(TEST_DIR, "src/index.ts"), "utf8");
+    const wrangler = await readFile(path.join(TEST_DIR, "wrangler.jsonc"), "utf8");
     expect(source.includes('from "@redopjs/redop/cloudflare"')).toBe(true);
     expect(source.includes("cloudflare(app")).toBe(true);
+    expect(wrangler.includes('"main": "src/index.ts"')).toBe(true);
+    expect(wrangler.includes('"nodejs_compat"')).toBe(true);
   });
 });

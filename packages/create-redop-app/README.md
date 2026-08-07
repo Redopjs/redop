@@ -64,7 +64,7 @@ Depending on the deploy preset, it can also add:
 - `Dockerfile`
 - `fly.toml`
 - `vercel.json` + `api/index.ts`
-- `wrangler.toml`
+- `wrangler.jsonc`
 
 ## Generated scripts
 
