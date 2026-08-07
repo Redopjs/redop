@@ -5,10 +5,6 @@ description: Deploy a Docker-based Redop HTTP server to Unkey Deploy, configure 
 
 Use Unkey when you want Docker-based deployment with automatic domains, preview environments, rollbacks, and Sentinel in front of your Redop app.
 
-<Note>
-Unkey Deploy is currently in private beta. This guide assumes you already have access to Unkey Deploy in your workspace.
-</Note>
-
 ## Before you start
 
 This guide assumes:
@@ -33,7 +29,7 @@ If your Redop app lives inside a monorepo, use the monorepo production image pat
 | Runtime port | Unkey injects `PORT` and defaults it to `8080` |
 | Environment model | default branch deploys to production, other branches deploy to preview |
 | `create-redop-app` preset | none today |
-| Recommended for | teams with Unkey Deploy beta access that want Docker deploys plus preview environments and Sentinel |
+| Recommended for | teams that want Docker deploys plus preview environments and Sentinel |
 
 ## Example listener shape
 
