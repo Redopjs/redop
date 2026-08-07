@@ -56,6 +56,17 @@ jobs:
             echo "Package $NAME@$VERSION is not on npm; publishing."
           fi
 
+      - name: Clear setup-node npm auth
+        if: steps.version.outputs.exists != 'true'
+        run: |
+          # setup-node may write an auth line that uses NODE_AUTH_TOKEN.
+          # Trusted Publishing uses OIDC instead, so remove token auth lines.
+          if [ -f "$HOME/.npmrc" ]; then
+            sed -i '/_authToken/d' "$HOME/.npmrc" || true
+            sed -i '/always-auth/d' "$HOME/.npmrc" || true
+          fi
+          rm -f .npmrc || true
+
       - name: Publish redop
         if: steps.version.outputs.exists != 'true'
         working-directory: packages/redop
