@@ -4,9 +4,9 @@
 [![Deploy to Fly.io](https://img.shields.io/badge/Deploy-Fly.io-f03603)](https://redop.useagents.site/docs/guides/deploy/fly-io)
 [![Docs: Deploy to Production](https://img.shields.io/badge/Docs-Deploy%20to%20Production-111827)](https://redop.useagents.site/docs/guides/deploy/index)
 
-Redop is a Bun-first TypeScript framework for building production MCP servers with typed tools, resources, prompts, middleware, hooks, plugins, and HTTP or stdio transports.
+Redop is a runtime-agnostic TypeScript framework for building production MCP servers with typed tools, resources, prompts, middleware, hooks, plugins, and HTTP or stdio transports.
 
-Use Redop when you want an explicit MCP framework instead of hand-writing transport, session, schema, and lifecycle plumbing yourself.
+Define the server once, then deploy on Bun, Node, Cloudflare Workers, or Vercel.
 
 ## Install
 
@@ -77,28 +77,27 @@ Redop does not rely on file-system routing. You compose MCP surface area directl
 
 ## Runtime adapters
 
-Bun `.listen()` remains the default. For other runtimes:
+Bun `.listen()` is the default local HTTP path. For other runtimes:
 
 ```ts
 import { Redop } from "@redopjs/redop";
-import { toCloudflare } from "@redopjs/redop/cloudflare";
-import { toVercel } from "@redopjs/redop/vercel";
+import { cloudflare } from "@redopjs/redop/cloudflare";
+import { vercel } from "@redopjs/redop/vercel";
 import { listenNode } from "@redopjs/redop/node";
 
 const app = new Redop({ serverInfo: { name: "demo", version: "0.1.0" } });
 
 // Cloudflare Workers
-export default toCloudflare(app);
+export default cloudflare(app);
 
 // Vercel / Edge (pass waitUntil in serverless)
-// export default toVercel(app, { waitUntil });
+// export default vercel(app, { waitUntil });
 
 // Node.js
 // listenNode(app, { port: 3000, hostname: "0.0.0.0" });
 ```
 
 Package exports: `@redopjs/redop/cloudflare`, `@redopjs/redop/vercel`, `@redopjs/redop/node`.
-
 ## Tools, resources, and prompts
 
 Redop supports all three main MCP surface types:
@@ -292,13 +291,15 @@ You define the server once and choose the transport at startup.
 
 ## Deploy
 
-For the built-in HTTP transport, start with:
+Start with:
 
 - Railway: https://redop.useagents.site/docs/guides/deploy/railway
 - Fly.io: https://redop.useagents.site/docs/guides/deploy/fly-io
 - Docker: https://redop.useagents.site/docs/guides/deploy/docker
-- Vercel caveat: https://redop.useagents.site/docs/guides/deploy/vercel
-
+- Cloudflare Workers: https://redop.useagents.site/docs/guides/deploy/cloudflare
+- Vercel: https://redop.useagents.site/docs/guides/deploy/vercel
+- Node.js: https://redop.useagents.site/docs/guides/deploy/node
+- Runtime adapters: https://redop.useagents.site/docs/reference/runtime-adapters
 ## License
 
 MIT © UseAgents

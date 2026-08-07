@@ -4,17 +4,18 @@
  * @example
  * ```ts
  * import { Redop } from "@redopjs/redop"
- * import { toCloudflare } from "@redopjs/redop/cloudflare"
+ * import { cloudflare } from "@redopjs/redop/cloudflare"
  *
  * const app = new Redop({ serverInfo: { name: "cf-mcp", version: "0.1.0" } })
  *   .tool("ping", { handler: async () => ({ ok: true }) })
  *
- * export default toCloudflare(app)
+ * export default cloudflare(app)
  * ```
  */
 
 export { Redop, definePlugin, middleware } from "./redop";
 export {
+  cloudflare,
   toCloudflare,
   withCloudflareWaitUntil,
   type CloudflareExecutionContext,

@@ -1,7 +1,7 @@
 {
   "name": "@redopjs/redop",
   "version": "0.1.6",
-  "description": "Bun-first MCP server framework with portable runtime adapters",
+  "description": "Runtime-agnostic TypeScript framework for production MCP servers",
   "keywords": [
     "bun",
     "cloudflare",

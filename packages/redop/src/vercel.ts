@@ -4,18 +4,20 @@
  * @example
  * ```ts
  * import { Redop } from "@redopjs/redop"
- * import { toVercel } from "@redopjs/redop/vercel"
+ * import { vercel } from "@redopjs/redop/vercel"
  * import { waitUntil } from "@vercel/functions"
  *
  * const app = new Redop({ serverInfo: { name: "vercel-mcp", version: "0.1.0" } })
  *   .tool("ping", { handler: async () => ({ ok: true }) })
  *
- * export default toVercel(app, { waitUntil })
+ * export default vercel(app, { waitUntil })
  * ```
  */
 
 export { Redop, definePlugin, middleware } from "./redop";
 export {
+  vercel,
+  vercelEdge,
   toVercel,
   toVercelEdge,
   type VercelAdapterOptions,

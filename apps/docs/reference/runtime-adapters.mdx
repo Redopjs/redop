@@ -3,7 +3,10 @@ title: Runtime Adapters
 description: Reference for Redop's portable fetch handler and Bun, Node, Cloudflare, and Vercel adapters.
 ---
 
-Redop is Bun-first. `.listen()` still starts a long-running Bun HTTP server by default. Portable deployments use `app.handler()` plus a thin runtime adapter.
+Redop is runtime-agnostic. Define the server once, then choose how to host it:
+
+- Bun: `.listen()` starts a long-running HTTP server (default local DX)
+- Cloudflare / Vercel / Node: `app.handler()` plus a thin adapter
 
 ## `app.handler(opts?)`
 
@@ -26,17 +29,19 @@ type HttpFetch = (
 | Export | Purpose |
 | ------ | ------- |
 | `@redopjs/redop` | Full API + Bun `.listen()` |
-| `@redopjs/redop/cloudflare` | `toCloudflare(app)` Workers handler |
-| `@redopjs/redop/vercel` | `toVercel(app)` / `toVercelEdge(app)` |
-| `@redopjs/redop/node` | `listenNode`, `toNodeListener`, `toNodeFetch` |
+| `@redopjs/redop/cloudflare` | `cloudflare(app)` Workers handler |
+| `@redopjs/redop/vercel` | `vercel(app)` / `vercelEdge(app)` |
+| `@redopjs/redop/node` | `listenNode`, `nodeListener`, `nodeFetch` |
+
+Compat aliases: `toCloudflare`, `toVercel`, `toVercelEdge`, `toNodeListener`, `toNodeHandler`, `toNodeFetch`.
 
 ## After-response scheduling
 
 | Runtime | How `afterResponse` is kept alive |
 | ------- | --------------------------------- |
 | Bun / Node (long-lived) | `queueMicrotask` |
-| Cloudflare Workers | `ctx.waitUntil(...)` via `toCloudflare` |
-| Vercel / Edge | pass `waitUntil` from `@vercel/functions` into `toVercel(app, { waitUntil })` |
+| Cloudflare Workers | `ctx.waitUntil(...)` via `cloudflare` |
+| Vercel / Edge | pass `waitUntil` from `@vercel/functions` into `vercel(app, { waitUntil })` |
 
 ## Capability matrix
 
@@ -51,13 +56,13 @@ type HttpFetch = (
 
 ```ts
 // Cloudflare
-import { toCloudflare } from "@redopjs/redop/cloudflare";
-export default toCloudflare(app);
+import { cloudflare } from "@redopjs/redop/cloudflare";
+export default cloudflare(app);
 
 // Vercel
-import { toVercel } from "@redopjs/redop/vercel";
+import { vercel } from "@redopjs/redop/vercel";
 import { waitUntil } from "@vercel/functions";
-export default toVercel(app, { waitUntil });
+export default vercel(app, { waitUntil });
 
 // Node
 import { listenNode } from "@redopjs/redop/node";

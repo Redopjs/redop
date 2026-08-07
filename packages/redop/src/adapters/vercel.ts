@@ -17,7 +17,7 @@ export type VercelAdapterOptions = HandlerOptions & {
    *
    * ```ts
    * import { waitUntil } from "@vercel/functions"
-   * export default toVercel(app, { waitUntil })
+   * export default vercel(app, { waitUntil })
    * ```
    */
   waitUntil?: VercelWaitUntil;
@@ -29,16 +29,16 @@ export type VercelAdapterOptions = HandlerOptions & {
  * @example
  * ```ts
  * import { Redop } from "@redopjs/redop"
- * import { toVercel } from "@redopjs/redop/vercel"
+ * import { vercel } from "@redopjs/redop/vercel"
  * import { waitUntil } from "@vercel/functions"
  *
  * const app = new Redop({ serverInfo: { name: "demo", version: "0.1.0" } })
  *   .tool("ping", { handler: async () => ({ ok: true }) })
  *
- * export default toVercel(app, { waitUntil })
+ * export default vercel(app, { waitUntil })
  * ```
  */
-export function toVercel(app: Redop, opts: VercelAdapterOptions = {}): HttpFetch {
+export function vercel(app: Redop, opts: VercelAdapterOptions = {}): HttpFetch {
   const handler = app.handler(opts);
   const waitUntil = opts.waitUntil;
 
@@ -52,11 +52,21 @@ export function toVercel(app: Redop, opts: VercelAdapterOptions = {}): HttpFetch
 }
 
 /**
- * Edge-friendly alias — same fetch handler as `toVercel`.
+ * Edge-friendly alias — same fetch handler as {@link vercel}.
  */
-export function toVercelEdge(
+export function vercelEdge(
   app: Redop,
   opts: VercelAdapterOptions = {}
 ): HttpFetch {
-  return toVercel(app, opts);
+  return vercel(app, opts);
 }
+
+/**
+ * @deprecated Prefer {@link vercel}. Kept for compatibility.
+ */
+export const toVercel = vercel;
+
+/**
+ * @deprecated Prefer {@link vercelEdge}. Kept for compatibility.
+ */
+export const toVercelEdge = vercelEdge;

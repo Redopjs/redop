@@ -160,7 +160,7 @@ describe("Generator Logic", () => {
     const pkg = await readFile(path.join(TEST_DIR, "package.json"), "utf8");
 
     expect(source.includes('from "@redopjs/redop/vercel"')).toBe(true);
-    expect(source.includes("toVercel(app")).toBe(true);
+    expect(source.includes("vercel(app")).toBe(true);
     expect(pkg.includes('"@vercel/functions"')).toBe(true);
   });
 
@@ -181,6 +181,6 @@ describe("Generator Logic", () => {
     expect(await exists(path.join(TEST_DIR, "wrangler.toml"))).toBe(true);
     const source = await readFile(path.join(TEST_DIR, "src/index.ts"), "utf8");
     expect(source.includes('from "@redopjs/redop/cloudflare"')).toBe(true);
-    expect(source.includes("toCloudflare(app")).toBe(true);
+    expect(source.includes("cloudflare(app")).toBe(true);
   });
 });

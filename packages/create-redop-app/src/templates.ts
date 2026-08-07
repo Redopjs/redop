@@ -266,7 +266,7 @@ ${chain}
   if (options.deploy === "vercel") {
     return `
 import { Redop } from "@redopjs/redop";
-import { toVercel } from "@redopjs/redop/vercel";
+import { vercel } from "@redopjs/redop/vercel";
 import { waitUntil } from "@vercel/functions";
 ${schemaBlock}
 const app = new Redop({
@@ -277,7 +277,7 @@ const app = new Redop({
 })
 ${chain};
 
-export default toVercel(app, {
+export default vercel(app, {
   health: true,
   waitUntil,
 });
@@ -287,7 +287,7 @@ export default toVercel(app, {
   if (options.deploy === "cloudflare") {
     return `
 import { Redop } from "@redopjs/redop";
-import { toCloudflare } from "@redopjs/redop/cloudflare";
+import { cloudflare } from "@redopjs/redop/cloudflare";
 ${schemaBlock}
 const app = new Redop({
   serverInfo: {
@@ -297,7 +297,7 @@ const app = new Redop({
 })
 ${chain};
 
-export default toCloudflare(app, {
+export default cloudflare(app, {
   health: true,
 });
 `;

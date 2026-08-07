@@ -2,7 +2,7 @@
 
 Thanks for contributing to Redop.
 
-This repo is a Bun-first monorepo for:
+This repo is a Bun-based monorepo for the runtime-agnostic Redop MCP framework:
 
 - `packages/redop`: the framework package
 - `packages/create-redop-app`: the starter scaffolder

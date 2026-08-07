@@ -23,8 +23,19 @@ export type CloudflareFetchHandler = (
  *
  * Prefer MCP `2026-07-28` (stateless) on Workers. Long-lived SSE / in-memory
  * sessions are not a good fit for the Workers request model.
+ *
+ * @example
+ * ```ts
+ * import { Redop } from "@redopjs/redop"
+ * import { cloudflare } from "@redopjs/redop/cloudflare"
+ *
+ * const app = new Redop({ serverInfo: { name: "cf-mcp", version: "0.1.0" } })
+ *   .tool("ping", { handler: async () => ({ ok: true }) })
+ *
+ * export default cloudflare(app)
+ * ```
  */
-export function toCloudflare(
+export function cloudflare(
   app: Redop,
   opts: HandlerOptions = {}
 ): { fetch: CloudflareFetchHandler } {
@@ -41,6 +52,11 @@ export function toCloudflare(
     },
   };
 }
+
+/**
+ * @deprecated Prefer {@link cloudflare}. Kept for compatibility.
+ */
+export const toCloudflare = cloudflare;
 
 /**
  * Lower-level helper when you already have a fetch handler.
