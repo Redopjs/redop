@@ -30,16 +30,17 @@ Do not point clients at `/mcp/health` or `/mcp/schema`. The current transport do
 
 ## What the current transport serves
 
-- `POST /mcp` for JSON-RPC
-- `GET /mcp` for the event stream
-- `DELETE /mcp` for session termination
+- `POST /mcp` for JSON-RPC (and `subscriptions/listen` SSE on MCP `2026-07-28`)
+- `GET /mcp` for the legacy sessioned event stream
+- `DELETE /mcp` for legacy session termination
 - an optional health route when you enable `health`
 
 ## Practical compatibility notes
 
-- the transport negotiates MCP protocol versions with the client
-- it keeps a compatibility layer for local Inspector-style workflows
-- it accepts client-provided session IDs for better tooling interoperability
+- the transport negotiates MCP protocol versions with the client (`2026-07-28` through `2024-11-05`)
+- MCP `2026-07-28` is stateless: no `Mcp-Session-Id`, but `Mcp-Method` / `Mcp-Name` are required
+- older clients still use sessions and Inspector-style `GET` SSE flows
+- it accepts client-provided session IDs for better tooling interoperability on legacy versions
 
 ## Common checks
 
