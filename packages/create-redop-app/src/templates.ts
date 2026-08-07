@@ -477,26 +477,44 @@ Step-by-step guides:
 
 This starter includes a production \`Dockerfile\` (compiled Bun binary). Unkey injects \`PORT\` (default \`8080\`) and this app binds \`0.0.0.0\` with \`/health\` enabled.
 
-### Option A — GitHub (build from Dockerfile)
+Unkey Deploy is in public beta. Official CLI docs: https://www.unkey.com/docs/build-and-deploy/cli
 
-1. Push this repo to GitHub.
-2. In Unkey Deploy, create a project and connect the repository.
-3. Point the build at this \`Dockerfile\`, then click Deploy.
+### Option A — CLI (\`unkey deploy\`)
 
-### Option B — CLI (pre-built image)
+The Unkey CLI deploys a **pre-built** image. You build/push the image yourself; Unkey does not build it for you in this path.
 
 \`\`\`sh
+# 1. Install + authenticate
+npm install -g unkey
+unkey auth login
+
+# 2. Build and push a public image (private registries are not supported yet)
 docker build -t ghcr.io/<you>/${pkg}:latest .
 docker push ghcr.io/<you>/${pkg}:latest
+
+# 3. Deploy (default --env is preview; pass production when ready)
 unkey deploy ghcr.io/<you>/${pkg}:latest --project=<project-slug> --env=production
 \`\`\`
 
-Replace \`<you>\` / \`<project-slug>\` (or set \`UNKEY_PROJECT\` and \`UNKEY_ROOT_KEY\`).
+Or via env vars in CI:
+
+\`\`\`sh
+export UNKEY_ROOT_KEY=unkey_xxx
+export UNKEY_PROJECT=<project-slug>
+unkey deploy ghcr.io/<you>/${pkg}:latest --env=production
+\`\`\`
+
+### Option B — GitHub (Unkey builds from Dockerfile)
+
+1. Push this repo to GitHub.
+2. In the Unkey dashboard, create a project and connect the repository.
+3. Point the build at this \`Dockerfile\`, then click Deploy.
 
 Step-by-step guide:
 
 - https://redop.useagents.site/docs/guides/deploy/unkey
-- https://docs.unkey.com/build-and-deploy/cli`;
+- https://www.unkey.com/docs/build-and-deploy/cli
+- https://www.unkey.com/docs/cli/overview`;
     }
     case "vercel": {
       return `## Deploy on Vercel

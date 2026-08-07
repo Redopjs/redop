@@ -220,6 +220,8 @@ describe("Generator Logic", () => {
     expect(source.includes("process.env.PORT ?? 8080")).toBe(true);
     expect(source.includes("health: true")).toBe(true);
     expect(readme.includes("unkey deploy")).toBe(true);
+    expect(readme.includes("unkey auth login")).toBe(true);
+    expect(readme.includes("npm install -g unkey")).toBe(true);
     expect(readme.includes("## Deploy on Unkey")).toBe(true);
   });
 });
