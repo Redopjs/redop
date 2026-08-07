@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { exists, readFile, rm } from "node:fs/promises";
+import { access, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 
 import { generateProject } from "../src/generator";
@@ -7,6 +7,14 @@ import type { ResolvedOptions } from "../src/types";
 
 const TEST_DIR = path.resolve(process.cwd(), "temp-test-app");
 
+async function exists(filePath: string) {
+  try {
+    await access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
 describe("Generator Logic", () => {
   // Clean up before and after tests
   const cleanup = async () => {

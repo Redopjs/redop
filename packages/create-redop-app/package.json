@@ -1,6 +1,6 @@
 {
   "name": "create-redop-app",
-  "version": "0.1.5",
+  "version": "0.1.7",
   "description": "Scaffold a Redop MCP server for Bun, Cloudflare, Vercel, and more",
   "keywords": [
     "bun",
@@ -10,10 +10,9 @@
     "scaffold"
   ],
   "homepage": "https://redop.useagents.site",
-
   "repository": {
     "type": "git",
-    "url": "https://github.com/redopjs/redop.git"
+    "url": "https://github.com/Redopjs/redop.git"
   },
   "bugs": {
     "url": "https://github.com/redopjs/redop/issues"
