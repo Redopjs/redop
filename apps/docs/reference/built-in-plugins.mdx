@@ -67,11 +67,15 @@ new Redop({ serverInfo: { name: "auth" } }).use(
 
 ## `oauth(opts)`
 
-- validates OAuth bearer tokens using issuer discovery and JWKS
+- validates OAuth bearer tokens using issuer discovery (OAuth AS or OpenID) + JWKS
+- when `resource` is set, serves RFC 9728 Protected Resource Metadata and returns HTTP 401/403 `WWW-Authenticate` challenges for MCP clients (Claude, etc.)
 - options:
   - `issuer: string`
-  - `audience?: string | string[]`
+  - `resource?: string` (absolute MCP URL — required for Claude-style OAuth)
+  - `audience?: string | string[]` (defaults to `resource`)
+  - `authorizationServers?: string[]` (defaults to `[issuer]`)
   - `requiredScopes?: string[]`
+  - `scopesSupported?: string[]`
   - `optional?: boolean`
 
 ```ts
@@ -80,7 +84,8 @@ import { oauth, Redop } from "@redopjs/redop";
 new Redop({ serverInfo: { name: "auth" } }).use(
   oauth({
     issuer: "https://auth.example.com",
-    audience: "my-mcp-server",
+    resource: "https://mcp.example.com/mcp",
+    requiredScopes: ["mcp:tools"],
   }),
 );
 ```

@@ -158,6 +158,23 @@ export interface HealthOptions {
 }
 
 /**
+ * RFC 9728 OAuth 2.0 Protected Resource Metadata served by the HTTP transport
+ * when `oauth({ resource })` / `jwt({ resource })` is configured.
+ */
+export interface ProtectedResourceConfig {
+  /**
+   * Absolute MCP resource identifier (RFC 8707 / RFC 9728 `resource`).
+   * Usually the public MCP URL, e.g. `https://mcp.example.com/mcp`.
+   */
+  resource: string;
+  /** Authorization servers advertised in protected resource metadata. */
+  authorizationServers: string[];
+  /** Scopes advertised to clients (and used in WWW-Authenticate challenges). */
+  scopesSupported?: string[];
+  bearerMethodsSupported?: string[];
+}
+
+/**
  * Transport options for `.listen(...)`.
  *
  * Passing a number is shorthand for `{ port: number }`.
@@ -204,6 +221,11 @@ export interface ListenOptions {
   };
   /** Session expiry in milliseconds for HTTP sessions. @default 60000 */
   sessionTimeout?: number;
+  /**
+   * RFC 9728 Protected Resource Metadata. Usually set automatically by
+   * `oauth({ resource })` / `jwt({ resource })` via `.use(...)`.
+   */
+  protectedResource?: ProtectedResourceConfig;
   tls?: TlsOptions;
   /** Transport kind. @default "http" when `port` is set, otherwise "stdio" */
   transport?: TransportKind;
@@ -215,5 +237,12 @@ export interface ListenOptions {
  */
 export type HandlerOptions = Pick<
   ListenOptions,
-  "cors" | "debug" | "health" | "maxBodySize" | "path" | "sessionTimeout" | "listCache"
+  | "cors"
+  | "debug"
+  | "health"
+  | "maxBodySize"
+  | "path"
+  | "sessionTimeout"
+  | "listCache"
+  | "protectedResource"
 >;

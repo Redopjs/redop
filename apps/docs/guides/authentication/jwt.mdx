@@ -31,6 +31,21 @@ new Redop({ serverInfo: { name: "jwt-demo" } }).use(
 );
 ```
 
+## MCP OAuth challenge (Claude / connectors)
+
+Set `resource` to the public MCP URL. Redop then serves Protected Resource Metadata and returns HTTP 401 challenges:
+
+```ts
+new Redop({ serverInfo: { name: "jwt-demo" } }).use(
+  jwt({
+    jwksUri: "https://your-app.clerk.accounts.dev/.well-known/jwks.json",
+    issuer: "https://your-app.clerk.accounts.dev",
+    resource: "https://mcp.example.com/mcp",
+    audience: "https://mcp.example.com/mcp",
+  }),
+);
+```
+
 ## Optional auth
 
 ```ts
