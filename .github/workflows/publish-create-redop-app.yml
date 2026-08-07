@@ -58,19 +58,18 @@ jobs:
             echo "Package $NAME@$VERSION is not on npm; publishing."
           fi
 
-      - name: Configure npm auth
-        if: steps.version.outputs.exists != 'true'
-        run: |
-          echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > "$HOME/.npmrc"
-          echo "always-auth=true" >> "$HOME/.npmrc"
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
       - name: Publish create-redop-app
         if: steps.version.outputs.exists != 'true'
         working-directory: packages/create-redop-app
-        run: npm publish --access public
+        run: |
+          set -euo pipefail
+          if [ -n "${NODE_AUTH_TOKEN:-}" ]; then
+            echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > "$HOME/.npmrc"
+            echo "always-auth=true" >> "$HOME/.npmrc"
+            npm publish --access public
+          else
+            # Prefer npm Trusted Publishing (OIDC) when NPM_TOKEN is unset.
+            npm publish --access public --provenance
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
