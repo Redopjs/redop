@@ -125,7 +125,7 @@ function selectedComponents(options: ResolvedOptions) {
 function schemaDependencies(
   schemaLibrary: SchemaLibrary,
   components: Set<Component>
-) {
+): Record<string, string> {
   if (!components.has("tools")) {
     return {};
   }
