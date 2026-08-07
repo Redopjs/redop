@@ -58,29 +58,10 @@ jobs:
             echo "Package $NAME@$VERSION is not on npm; publishing."
           fi
 
-      - name: Clear setup-node npm auth
-        if: steps.version.outputs.exists != 'true'
-        run: |
-          # setup-node may write an auth line that uses NODE_AUTH_TOKEN.
-          # Trusted Publishing uses OIDC instead, so remove token auth lines.
-          if [ -f "$HOME/.npmrc" ]; then
-            sed -i '/_authToken/d' "$HOME/.npmrc" || true
-            sed -i '/always-auth/d' "$HOME/.npmrc" || true
-          fi
-          rm -f .npmrc || true
-
       - name: Publish create-redop-app
         if: steps.version.outputs.exists != 'true'
         working-directory: packages/create-redop-app
-        run: |
-          set -euo pipefail
-          if [ -n "${NODE_AUTH_TOKEN:-}" ]; then
-            echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > "$HOME/.npmrc"
-            echo "always-auth=true" >> "$HOME/.npmrc"
-            npm publish --access public
-          else
-            # Prefer npm Trusted Publishing (OIDC) when NPM_TOKEN is unset.
-            npm publish --access public --provenance
-          fi
+        run: npm publish --access public --provenance
         env:
+          # Optional classic token. Prefer npm Trusted Publishing (OIDC) for this workflow.
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
