@@ -40,7 +40,7 @@
     },
     "packages/create-redop-app": {
       "name": "create-redop-app",
-      "version": "0.1.5",
+      "version": "0.1.9",
       "bin": {
         "create-redop-app": "./dist/index.js",
       },
@@ -58,7 +58,7 @@
     },
     "packages/redop": {
       "name": "@redopjs/redop",
-      "version": "0.1.6",
+      "version": "0.1.11",
       "dependencies": {
         "zod": "^4.3.6",
       },

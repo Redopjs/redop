@@ -1,32 +1,80 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { createServer, type Server } from "node:http";
+import { createServer as createHttpServer, type Server } from "node:http";
+import { createServer as createHttpsServer } from "node:https";
+import {
+  createSecureServer as createHttp2SecureServer,
+  createServer as createHttp2Server,
+  type Http2ServerRequest,
+  type Http2ServerResponse,
+} from "node:http2";
 import { Readable } from "node:stream";
-import type { HandlerOptions } from "../types";
+import type { HandlerOptions, ListenOptions, TlsOptions } from "../types";
 import type { Redop } from "../redop";
 import type { HttpFetch } from "../transports/runtime";
 
-export type NodeListenOptions = HandlerOptions & {
-  hostname?: string;
-  port?: number | string;
-  onListen?: (info: { hostname: string; port: number; url: string }) => void;
-};
+export type NodeIncoming = IncomingMessage | Http2ServerRequest;
+export type NodeOutgoing = ServerResponse | Http2ServerResponse;
+
+export type NodeListenOptions = HandlerOptions &
+  Pick<
+    ListenOptions,
+    | "hostname"
+    | "port"
+    | "tls"
+    | "http1"
+    | "http2"
+    | "unix"
+    | "reusePort"
+    | "idleTimeout"
+  > & {
+    onListen?: (info: { hostname: string; port: number; url: string }) => void;
+  };
+
+function tlsToNode(tls: TlsOptions): { key: Buffer | string; cert: Buffer | string } {
+  const toNodeSecret = (value: TlsOptions["key"] | TlsOptions["cert"]) => {
+    if (value === undefined) {
+      throw new Error("[redop:node] tls.key and tls.cert are required");
+    }
+    const first = Array.isArray(value) ? value[0] : value;
+    if (typeof first === "string" || Buffer.isBuffer(first)) {
+      return first;
+    }
+    if (first && typeof first === "object") {
+      return Buffer.from(first as unknown as ArrayBuffer);
+    }
+    throw new Error(
+      "[redop:node] tls.key / tls.cert must be a string or Buffer"
+    );
+  };
+  return { key: toNodeSecret(tls.key), cert: toNodeSecret(tls.cert) };
+}
 
 /**
  * Convert a Node `IncomingMessage` into a Web `Request`.
  */
 export async function incomingMessageToRequest(
-  req: IncomingMessage,
-  opts: { hostname?: string; port?: number; protocol?: string } = {}
+  req: NodeIncoming,
+  opts: {
+    hostname?: string;
+    port?: number;
+    protocol?: string;
+    maxBodySize?: number;
+  } = {}
 ): Promise<Request> {
-  const protocol = opts.protocol ?? "http";
+  const encrypted =
+    "encrypted" in req.socket && Boolean(req.socket.encrypted);
+  const protocol = opts.protocol ?? (encrypted ? "https" : "http");
   const host =
     req.headers.host ??
+    (typeof req.headers[":authority"] === "string"
+      ? req.headers[":authority"]
+      : undefined) ??
     `${opts.hostname ?? "127.0.0.1"}${opts.port ? `:${opts.port}` : ""}`;
   const url = `${protocol}://${host}${req.url ?? "/"}`;
 
   const headers = new Headers();
   for (const [key, value] of Object.entries(req.headers)) {
-    if (value === undefined) {
+    if (value === undefined || key.startsWith(":")) {
       continue;
     }
     if (Array.isArray(value)) {
@@ -34,7 +82,7 @@ export async function incomingMessageToRequest(
         headers.append(key, item);
       }
     } else {
-      headers.set(key, value);
+      headers.set(key, String(value));
     }
   }
 
@@ -45,16 +93,36 @@ export async function incomingMessageToRequest(
     return new Request(url, { method, headers });
   }
 
+  const maxBodySize = opts.maxBodySize;
+  const declared = Number(req.headers["content-length"] ?? NaN);
+  if (
+    maxBodySize !== undefined &&
+    Number.isFinite(declared) &&
+    declared > maxBodySize
+  ) {
+    const err = new Error("Payload Too Large");
+    (err as Error & { status: number }).status = 413;
+    throw err;
+  }
+
   const chunks: Buffer[] = [];
+  let size = 0;
   for await (const chunk of req) {
-    chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
+    const buf = typeof chunk === "string" ? Buffer.from(chunk) : chunk;
+    size += buf.byteLength;
+    if (maxBodySize !== undefined && size > maxBodySize) {
+      const err = new Error("Payload Too Large");
+      (err as Error & { status: number }).status = 413;
+      throw err;
+    }
+    chunks.push(buf);
   }
   const body = Buffer.concat(chunks);
 
   return new Request(url, {
     method,
     headers,
-    body: body.byteLength > 0 ? body : undefined,
+    body: body.byteLength > 0 ? new Uint8Array(body) : undefined,
   });
 }
 
@@ -63,7 +131,7 @@ export async function incomingMessageToRequest(
  */
 export async function writeNodeResponse(
   webResponse: Response,
-  res: ServerResponse
+  res: NodeOutgoing
 ): Promise<void> {
   res.statusCode = webResponse.status;
   webResponse.headers.forEach((value, key) => {
@@ -104,20 +172,33 @@ export async function writeNodeResponse(
 export function nodeListener(
   app: Redop,
   opts: HandlerOptions = {}
-): (req: IncomingMessage, res: ServerResponse) => void {
+): (req: NodeIncoming, res: NodeOutgoing) => void {
   const handler = app.handler(opts);
   return (req, res) => {
     void (async () => {
       try {
-        const request = await incomingMessageToRequest(req);
+        const request = await incomingMessageToRequest(req, {
+          maxBodySize: opts.maxBodySize,
+        });
         const response = await handler(request);
         await writeNodeResponse(response, res);
       } catch (error) {
+        const status =
+          error &&
+          typeof error === "object" &&
+          "status" in error &&
+          typeof (error as { status: unknown }).status === "number"
+            ? (error as { status: number }).status
+            : 500;
         if (!res.headersSent) {
-          res.statusCode = 500;
+          res.statusCode = status;
           res.setHeader("content-type", "text/plain; charset=utf-8");
           res.end(
-            error instanceof Error ? error.message : "Internal Server Error"
+            error instanceof Error
+              ? error.message
+              : status === 413
+                ? "Payload Too Large"
+                : "Internal Server Error"
           );
         } else {
           res.destroy(error instanceof Error ? error : undefined);
@@ -159,12 +240,70 @@ export function listenNode(
   const hostname = opts.hostname ?? "127.0.0.1";
   const mcpPath = opts.path ?? "/mcp";
   const listener = nodeListener(app, opts);
+  const http2 = opts.http2 ?? Boolean(opts.tls);
+  const http1 = opts.http1 ?? true;
 
-  const server = createServer(listener);
-  server.listen(port, hostname, () => {
-    const url = `http://${hostname}:${port}${mcpPath}`;
-    opts.onListen?.({ hostname, port, url });
-  });
+  let server: Server;
+  const nodeListenerFn = listener as (
+    req: IncomingMessage,
+    res: ServerResponse
+  ) => void;
+
+  if (opts.tls && http2) {
+    server = createHttp2SecureServer(
+      {
+        ...tlsToNode(opts.tls),
+        allowHTTP1: http1,
+      },
+      nodeListenerFn as never
+    ) as unknown as Server;
+  } else if (opts.tls) {
+    server = createHttpsServer(tlsToNode(opts.tls), nodeListenerFn);
+  } else if (http2) {
+    server = createHttp2Server(nodeListenerFn as never) as unknown as Server;
+  } else {
+    server = createHttpServer(nodeListenerFn);
+  }
+
+  if (opts.idleTimeout !== undefined && "keepAliveTimeout" in server) {
+    server.keepAliveTimeout = opts.idleTimeout * 1000;
+  }
+
+  const onListening = () => {
+    if (opts.unix) {
+      opts.onListen?.({
+        hostname: "unix",
+        port: 0,
+        url: `unix:${opts.unix}${mcpPath}`,
+      });
+      return;
+    }
+    const address = server.address();
+    const boundPort =
+      address && typeof address === "object" ? address.port : port;
+    const proto = opts.tls ? "https" : "http";
+    const url = `${proto}://${hostname}:${boundPort}${mcpPath}`;
+    opts.onListen?.({ hostname, port: boundPort, url });
+  };
+
+  if (opts.unix) {
+    server.listen(
+      {
+        path: opts.unix,
+        ...(opts.reusePort ? { reusePort: true } : {}),
+      },
+      onListening
+    );
+  } else {
+    server.listen(
+      {
+        port,
+        host: hostname,
+        ...(opts.reusePort ? { reusePort: true } : {}),
+      },
+      onListening
+    );
+  }
 
   return server;
 }

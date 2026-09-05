@@ -109,23 +109,47 @@ export function startHttpTransport(
     caps
   );
 
-  const server = serve({
-    port,
-    hostname,
-    idleTimeout: 255,
+  const useUnix = Boolean(opts.unix);
+  const serveOptions = {
+    idleTimeout: opts.idleTimeout ?? 255,
+    development: opts.development ?? false,
+    reusePort: opts.reusePort ?? false,
     tls: opts.tls,
-    async fetch(req, bunServer) {
+    http1: opts.http1 ?? true,
+    http2: opts.http2 ?? true,
+    ...(opts.maxBodySize !== undefined
+      ? { maxRequestBodySize: opts.maxBodySize }
+      : {}),
+    ...(Object.keys(app.staticRoutes).length > 0
+      ? { routes: app.staticRoutes }
+      : {}),
+    error(error: unknown) {
+      console.error("[redop:http] unhandled", error);
+      return new Response("Internal Server Error", { status: 500 });
+    },
+    async fetch(req: Request, bunServer: { timeout(request: Request, seconds: number): void }) {
       return app.fetch(req, {
         disableIdleTimeout(request) {
           bunServer.timeout(request, 0);
         },
       });
     },
-  });
+    ...(useUnix
+      ? { unix: opts.unix as string }
+      : {
+          port,
+          hostname,
+          http3: opts.http3 ?? Boolean(opts.tls),
+        }),
+  };
+
+  const server = serve(serveOptions as Parameters<BunServe>[0]);
 
   const boundPort = server.port ?? port;
-  const listenUrl = `http${opts.tls ? "s" : ""}://${hostname}:${boundPort}${mcpPath}`;
-  opts.onListen?.({ hostname, port: boundPort, url: listenUrl });
+  const listenUrl = useUnix
+    ? `unix:${opts.unix}${mcpPath}`
+    : `http${opts.tls ? "s" : ""}://${hostname}:${boundPort}${mcpPath}`;
+  opts.onListen?.({ hostname: useUnix ? "unix" : hostname, port: boundPort, url: listenUrl });
 
   return {
     push(sessionId, payload, options) {
@@ -135,8 +159,10 @@ export function startHttpTransport(
       app.broadcast(payload, options);
     },
     stop() {
-      server.stop();
-      app.stop();
+      const halted = Promise.resolve(server.stop()).then(() => {
+        app.stop();
+      });
+      return halted;
     },
   };
 }

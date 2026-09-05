@@ -227,6 +227,38 @@ export interface ListenOptions {
    */
   protectedResource?: ProtectedResourceConfig;
   tls?: TlsOptions;
+  /**
+   * Serve HTTP/1.1 from the Bun (and Node TLS) listener. @default true
+   */
+  http1?: boolean;
+  /**
+   * Also serve HTTP/2 on the same port (ALPN with TLS, h2c prior-knowledge
+   * without). @default true
+   */
+  http2?: boolean;
+  /**
+   * Also listen for HTTP/3 (QUIC) on the same port. Requires `tls`.
+   * Bun-only. Ignored with `unix`. @default true when `tls` is set
+   */
+  http3?: boolean;
+  /**
+   * `SO_REUSEPORT` so multiple processes can bind the same port.
+   * @default false
+   */
+  reusePort?: boolean;
+  /**
+   * Idle connection timeout in seconds (Bun max 255). @default 255
+   */
+  idleTimeout?: number;
+  /**
+   * Unix domain socket path. Disables TCP/`http3`. Prefix with `\0` for a
+   * Linux abstract namespace socket.
+   */
+  unix?: string;
+  /**
+   * Bun `development` mode. @default false
+   */
+  development?: boolean;
   /** Transport kind. @default "http" when `port` is set, otherwise "stdio" */
   transport?: TransportKind;
 }

@@ -65,6 +65,70 @@ describe("HTTP CORS, health, and path", () => {
     );
   });
 
+  test("cors: false omits Access-Control-Allow-Origin", async () => {
+    const app = new Redop({
+      serverInfo: { name: "cors-off", version: "0.1.0" },
+    }).tool("ping", { handler: async () => ({ ok: true }) });
+    const { response } = await callHandler(
+      app,
+      "server/discover",
+      {},
+      { cors: false }
+    );
+    expect(response.headers.get("Access-Control-Allow-Origin")).toBeNull();
+  });
+
+  test("cors origins reject unmatched preflight", async () => {
+    const app = new Redop({
+      serverInfo: { name: "cors-origin", version: "0.1.0" },
+    }).tool("ping", { handler: async () => ({ ok: true }) });
+    const handler = app.handler({
+      cors: { origins: ["https://app.example.com"] },
+    });
+    const denied = await handler(
+      new Request("http://localhost/mcp", {
+        method: "OPTIONS",
+        headers: { origin: "https://evil.example.com" },
+      })
+    );
+    expect(denied.status).toBe(403);
+
+    const allowed = await handler(
+      new Request("http://localhost/mcp", {
+        method: "OPTIONS",
+        headers: { origin: "https://app.example.com" },
+      })
+    );
+    expect(allowed.status).toBe(204);
+    expect(allowed.headers.get("Access-Control-Allow-Origin")).toBe(
+      "https://app.example.com"
+    );
+  });
+
+  test("maxBodySize rejects oversized Content-Length", async () => {
+    const app = new Redop({
+      serverInfo: { name: "max-body", version: "0.1.0" },
+    }).tool("ping", { handler: async () => ({ ok: true }) });
+    const handler = app.handler({ maxBodySize: 32 });
+    const response = await handler(
+      new Request("http://localhost/mcp", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "content-length": "4096",
+          "mcp-protocol-version": PROTOCOL_LATEST,
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "server/discover",
+          params: {},
+        }),
+      })
+    );
+    expect(response.status).toBe(413);
+  });
+
   test("custom MCP path serves there and 404s elsewhere", async () => {
     const app = new Redop({
       serverInfo: { name: "custom-path", version: "0.1.0" },

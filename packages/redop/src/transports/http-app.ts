@@ -6,6 +6,7 @@
 
 import type {
   CapabilityOptions,
+  CorsOptions,
   JsonRpcRequest,
   JsonRpcResponse,
   ListenOptions,
@@ -66,6 +67,7 @@ type TaskStatus =
 
 interface StoredTask {
   createdAt: string;
+  createdAtMs: number;
   inputRequests?: Record<string, unknown>;
   inputResponses?: Record<string, unknown>;
   lastUpdatedAt: string;
@@ -91,6 +93,7 @@ function taskPublic(t: StoredTask) {
     result: _r,
     rpcError: _e,
     inputResponses: _ir,
+    createdAtMs: _ms,
     ...pub
   } = t;
   const out: Record<string, unknown> = { ...pub };
@@ -105,8 +108,112 @@ function taskPublic(t: StoredTask) {
 const TERMINAL = new Set<TaskStatus>(["completed", "failed", "cancelled"]);
 const isTerminal = (s: TaskStatus) => TERMINAL.has(s);
 
-function isOriginAllowed(origin: string | null, serverUrl: string): boolean {
+function requestPathname(url: string): string {
+  const proto = url.indexOf("://");
+  const start = proto === -1 ? url.indexOf("/") : url.indexOf("/", proto + 3);
+  if (start === -1) {
+    return "/";
+  }
+  let end = url.length;
+  const q = url.indexOf("?", start);
+  const h = url.indexOf("#", start);
+  if (q !== -1) {
+    end = q;
+  }
+  if (h !== -1 && h < end) {
+    end = h;
+  }
+  return url.slice(start, end) || "/";
+}
+
+const DEFAULT_CORS_METHODS = "GET, POST, DELETE, OPTIONS";
+const DEFAULT_CORS_ALLOW_HEADERS =
+  "Content-Type, Accept, Authorization, MCP-Session-Id, MCP-Protocol-Version, Mcp-Method, Mcp-Name, Last-Event-ID";
+const DEFAULT_CORS_EXPOSE =
+  "WWW-Authenticate, MCP-Protocol-Version, Mcp-Session-Id";
+const JSON_CONTENT_TYPE = { "Content-Type": "application/json" } as const;
+
+type ResolvedCors =
+  | null
+  | { mode: "permissive" }
+  | { mode: "custom"; options: CorsOptions };
+
+function resolveCors(cors: boolean | CorsOptions | undefined): ResolvedCors {
+  if (cors === false) {
+    return null;
+  }
+  if (cors && typeof cors === "object") {
+    return { mode: "custom", options: cors };
+  }
+  return { mode: "permissive" };
+}
+
+function corsAllowOrigin(
+  origin: string | null,
+  cors: ResolvedCors
+): string | null {
+  if (!cors) {
+    return null;
+  }
+  if (cors.mode === "permissive") {
+    return origin ?? "*";
+  }
+  const allowed = cors.options.origins;
+  if (allowed === undefined) {
+    return cors.options.credentials ? origin : (origin ?? "*");
+  }
+  const list = Array.isArray(allowed) ? allowed : [allowed];
+  if (origin && list.includes(origin)) {
+    return origin;
+  }
+  if (list.includes("*") && !cors.options.credentials) {
+    return "*";
+  }
+  return null;
+}
+
+function corsHeaders(
+  origin: string | null,
+  cors: ResolvedCors,
+  kind: "preflight" | "response"
+): Record<string, string> | null {
+  const allowOrigin = corsAllowOrigin(origin, cors);
+  if (!allowOrigin) {
+    return null;
+  }
+  const headers: Record<string, string> = {
+    "Access-Control-Allow-Origin": allowOrigin,
+  };
+  if (cors && cors.mode === "custom") {
+    if (cors.options.credentials) {
+      headers["Access-Control-Allow-Credentials"] = "true";
+    }
+    if (kind === "preflight") {
+      headers["Access-Control-Allow-Methods"] = (
+        cors.options.methods ?? DEFAULT_CORS_METHODS.split(", ")
+      ).join(", ");
+      headers["Access-Control-Allow-Headers"] = (
+        cors.options.headers ?? DEFAULT_CORS_ALLOW_HEADERS.split(", ")
+      ).join(", ");
+    }
+    headers["Access-Control-Expose-Headers"] = DEFAULT_CORS_EXPOSE;
+  } else if (kind === "preflight") {
+    headers["Access-Control-Allow-Methods"] = DEFAULT_CORS_METHODS;
+    headers["Access-Control-Allow-Headers"] = DEFAULT_CORS_ALLOW_HEADERS;
+    headers["Access-Control-Expose-Headers"] = DEFAULT_CORS_EXPOSE;
+  }
+  return headers;
+}
+
+function isOriginAllowed(
+  origin: string | null,
+  serverUrl: string,
+  cors: ResolvedCors
+): boolean {
   if (!origin) {
+    return true;
+  }
+  if (corsAllowOrigin(origin, cors) && cors?.mode === "custom") {
     return true;
   }
   try {
@@ -136,32 +243,47 @@ function createStore(sessionTimeoutMs: number) {
   const sessions = new Map<string, { lastSeen: number }>();
   const tasks = new Map<string, StoredTask>();
 
-  // Cloudflare Workers forbid timers at module top-level. Start the sweeper
-  // lazily on first use (typically the first request) instead.
+  // Cloudflare Workers forbid timers at module top-level. Sweep lazily on
+  // mutate, with a coarse unref'd interval as a backup on long-lived runtimes.
   let timer: ReturnType<typeof setInterval> | null = null;
+  let lastSweep = 0;
 
-  const ensureTimer = () => {
-    if (timer !== null || sessionTimeoutMs <= 0) {
-      return;
-    }
-    timer = setInterval(() => {
-      const now = Date.now();
+  const sweep = (now = Date.now()) => {
+    lastSweep = now;
+    if (sessionTimeoutMs > 0) {
       for (const [id, s] of sessions) {
         if (now - s.lastSeen > sessionTimeoutMs) {
           sessions.delete(id);
         }
       }
-      for (const [, t] of tasks) {
-        if (t.ttl === null) {
-          continue;
-        }
-        if (now - new Date(t.createdAt).getTime() > t.ttl) {
-          for (const w of t.waiters) {
-            w();
-          }
-          tasks.delete(t.taskId);
-        }
+    }
+    for (const [id, t] of tasks) {
+      if (t.ttl === null) {
+        continue;
       }
+      if (now - t.createdAtMs > t.ttl) {
+        for (const w of t.waiters) {
+          w();
+        }
+        tasks.delete(id);
+      }
+    }
+  };
+
+  const maybeSweep = () => {
+    const now = Date.now();
+    if (now - lastSweep >= 5_000) {
+      sweep(now);
+    }
+  };
+
+  const ensureTimer = () => {
+    maybeSweep();
+    if (timer !== null || sessionTimeoutMs <= 0) {
+      return;
+    }
+    timer = setInterval(() => {
+      sweep();
     }, 30_000);
 
     if (
@@ -204,11 +326,13 @@ function createStore(sessionTimeoutMs: number) {
     tasks: {
       create(ttl?: number): StoredTask {
         ensureTimer();
-        const now = isoNow();
+        const createdAtMs = Date.now();
+        const now = new Date(createdAtMs).toISOString();
         const t: StoredTask = {
           taskId: crypto.randomUUID(),
           status: "working",
           createdAt: now,
+          createdAtMs,
           lastUpdatedAt: now,
           ttl: ttl ?? null,
           pollInterval: 2000,
@@ -1144,12 +1268,20 @@ export interface TransportHandle {
     payload: unknown,
     options?: { event?: string }
   ): boolean;
-  stop(): void;
+  stop(): void | Promise<void>;
 }
 
 export interface HttpApp extends TransportHandle {
   /** Portable MCP fetch handler. */
   fetch: HttpFetch;
+  /** Static GET/HEAD routes for Bun.serve `routes` (health + PRM). */
+  staticRoutes: Record<
+    string,
+    {
+      GET: (req: Request) => Response;
+      HEAD: (req: Request) => Response;
+    }
+  >;
 }
 
 export type HttpAppOptions = Pick<
@@ -1192,6 +1324,59 @@ export function createHttpApp(
   const store = createStore(opts.sessionTimeout ?? 60_000);
   const mcpPath = opts.path ?? "/mcp";
   const hub = new SseHub();
+  const cors = resolveCors(opts.cors);
+  const maxBodySize = opts.maxBodySize;
+  const forbiddenBody = JSON.stringify({
+    jsonrpc: "2.0",
+    id: null,
+    error: { code: -32_600, message: "Forbidden" },
+  });
+  const healthJson = JSON.stringify({
+    ok: true,
+    mcpPath,
+    service: serverInfo.name,
+    transport: "http",
+  });
+  const prmDoc = opts.protectedResource
+    ? buildProtectedResourceDocument(opts.protectedResource)
+    : null;
+  const prmPaths = opts.protectedResource
+    ? protectedResourceMetadataPaths(mcpPath)
+    : null;
+
+  function attachCors(
+    headers: Record<string, string>,
+    origin: string | null,
+    kind: "preflight" | "response" = "response"
+  ): Record<string, string> {
+    const extra = corsHeaders(origin, cors, kind);
+    if (extra) {
+      Object.assign(headers, extra);
+    }
+    return headers;
+  }
+
+  function healthResponse(method: string): Response {
+    if (method === "HEAD") {
+      return new Response(null, { status: 200 });
+    }
+    return new Response(healthJson, {
+      status: 200,
+      headers: JSON_CONTENT_TYPE,
+    });
+  }
+
+  function prmResponse(method: string, origin: string | null): Response {
+    if (method === "HEAD") {
+      return new Response(null, {
+        status: 200,
+        headers: attachCors({ "Content-Type": "application/json" }, origin),
+      });
+    }
+    return Response.json(prmDoc, {
+      headers: attachCors({ "Cache-Control": "public, max-age=3600" }, origin),
+    });
+  }
   const listCache = {
     ttlMs: opts.listCache?.ttlMs ?? DEFAULT_LIST_CACHE.ttlMs,
     cacheScope: opts.listCache?.cacheScope ?? DEFAULT_LIST_CACHE.cacheScope,
@@ -1217,7 +1402,7 @@ export function createHttpApp(
   }
 
   const fetch: HttpFetch = async (req, runtime) => {
-      const url = new URL(req.url);
+      const pathname = requestPathname(req.url);
       const origin = req.headers.get("origin");
       const ver = req.headers.get("mcp-protocol-version");
 
@@ -1232,30 +1417,28 @@ export function createHttpApp(
       });
 
       // ── Origin guard (DNS-rebinding) ─────────
-      if (!isOriginAllowed(origin, req.url)) {
+      if (!isOriginAllowed(origin, req.url, cors)) {
         debugLog("forbidden_origin", { origin, url: req.url });
-        return new Response(
-          JSON.stringify({
-            jsonrpc: "2.0",
-            id: null,
-            error: { code: -32_600, message: "Forbidden" },
-          }),
-          { status: 403, headers: { "Content-Type": "application/json" } }
-        );
+        return new Response(forbiddenBody, {
+          status: 403,
+          headers: JSON_CONTENT_TYPE,
+        });
       }
 
       // ── CORS preflight ────────────────────────
       if (req.method === "OPTIONS") {
+        const headers = corsHeaders(origin, cors, "preflight");
+        if (
+          cors &&
+          cors.mode === "custom" &&
+          cors.options.origins &&
+          !corsAllowOrigin(origin, cors)
+        ) {
+          return new Response(null, { status: 403 });
+        }
         return new Response(null, {
           status: 204,
-          headers: {
-            "Access-Control-Allow-Origin": origin ?? "*",
-            "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
-            "Access-Control-Allow-Headers":
-              "Content-Type, Accept, Authorization, MCP-Session-Id, MCP-Protocol-Version, Mcp-Method, Mcp-Name, Last-Event-ID",
-            "Access-Control-Expose-Headers":
-              "WWW-Authenticate, MCP-Protocol-Version, Mcp-Session-Id",
-          },
+          headers: headers ?? {},
         });
       }
 
@@ -1263,48 +1446,18 @@ export function createHttpApp(
       if (
         healthPath &&
         (req.method === "GET" || req.method === "HEAD") &&
-        url.pathname === healthPath
+        pathname === healthPath
       ) {
-        if (req.method === "HEAD") {
-          return new Response(null, { status: 200 });
-        }
-        return Response.json({
-          ok: true,
-          mcpPath,
-          service: serverInfo.name,
-          transport: "http",
-        });
+        return healthResponse(req.method);
       }
 
       // ── OAuth Protected Resource Metadata (RFC 9728) ─
       if (
-        opts.protectedResource &&
-        (req.method === "GET" || req.method === "HEAD")
+        prmPaths &&
+        (req.method === "GET" || req.method === "HEAD") &&
+        (pathname === prmPaths.root || pathname === prmPaths.suffixed)
       ) {
-        const paths = protectedResourceMetadataPaths(mcpPath);
-        if (
-          url.pathname === paths.root ||
-          url.pathname === paths.suffixed
-        ) {
-          if (req.method === "HEAD") {
-            return new Response(null, {
-              status: 200,
-              headers: {
-                "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": origin ?? "*",
-              },
-            });
-          }
-          return Response.json(
-            buildProtectedResourceDocument(opts.protectedResource),
-            {
-              headers: {
-                "Access-Control-Allow-Origin": origin ?? "*",
-                "Cache-Control": "public, max-age=3600",
-              },
-            }
-          );
-        }
+        return prmResponse(req.method, origin);
       }
 
       // ── Protocol version guard ────────────────
@@ -1327,7 +1480,7 @@ export function createHttpApp(
         );
       }
 
-      if (url.pathname !== mcpPath) {
+      if (pathname !== mcpPath) {
         return new Response("Not Found", { status: 404 });
       }
 
@@ -1392,20 +1545,25 @@ export function createHttpApp(
         const { stream } = hub.open(sid, req.headers.get("last-event-id"));
 
         return new Response(stream, {
-          headers: {
+          headers: attachCors({
             "Content-Type": "text/event-stream",
             "Cache-Control": "no-cache",
             Connection: "keep-alive",
             "Mcp-Session-Id": sid,
-            "Access-Control-Allow-Origin": origin ?? "*",
             // nginx: prevent proxy buffering from holding SSE frames
             "X-Accel-Buffering": "no",
-          },
+          }, origin),
         });
       }
 
       // ── POST — JSON-RPC ───────────────────────
       if (req.method === "POST") {
+        if (maxBodySize !== undefined) {
+          const length = Number(req.headers.get("content-length") ?? NaN);
+          if (Number.isFinite(length) && length > maxBodySize) {
+            return new Response("Payload Too Large", { status: 413 });
+          }
+        }
         let body: JsonRpcRequest;
         try {
           body = (await req.json()) as JsonRpcRequest;
@@ -1595,14 +1753,13 @@ export function createHttpApp(
           });
 
           return new Response(stream, {
-            headers: {
+            headers: attachCors({
               "Content-Type": "text/event-stream",
               "Cache-Control": "no-cache",
               Connection: "keep-alive",
               "MCP-Protocol-Version": protocolVersion,
-              "Access-Control-Allow-Origin": origin ?? "*",
               "X-Accel-Buffering": "no",
-            },
+            }, origin),
           });
         }
 
@@ -1724,22 +1881,20 @@ export function createHttpApp(
             }),
             {
               status: httpAuth.status,
-              headers: {
+              headers: attachCors({
                 "Content-Type": "application/json",
                 "WWW-Authenticate": httpAuth.wwwAuthenticate,
                 "MCP-Protocol-Version": protocolVersion,
-                "Access-Control-Allow-Origin": origin ?? "*",
                 "Access-Control-Expose-Headers":
                   "WWW-Authenticate, MCP-Protocol-Version, Mcp-Session-Id",
-              },
+              }, origin),
             }
           );
         }
 
-        const responseHeaders: Record<string, string> = {
+        const responseHeaders = attachCors({
           "MCP-Protocol-Version": protocolVersion,
-          "Access-Control-Allow-Origin": origin ?? "*",
-        };
+        }, origin);
         if (!stateless && activeSession) {
           responseHeaders["Mcp-Session-Id"] = activeSession;
         }
@@ -1796,8 +1951,27 @@ export function createHttpApp(
     };
   }
 
+  const staticRoutes: HttpApp["staticRoutes"] = {};
+  if (healthPath) {
+    staticRoutes[healthPath] = {
+      GET: () => healthResponse("GET"),
+      HEAD: () => healthResponse("HEAD"),
+    };
+  }
+  if (prmPaths) {
+    const prmRoute = {
+      GET: (req: Request) => prmResponse("GET", req.headers.get("origin")),
+      HEAD: (req: Request) => prmResponse("HEAD", req.headers.get("origin")),
+    };
+    staticRoutes[prmPaths.root] = prmRoute;
+    if (prmPaths.suffixed !== prmPaths.root) {
+      staticRoutes[prmPaths.suffixed] = prmRoute;
+    }
+  }
+
   return {
     fetch,
+    staticRoutes,
     push(sessionId, payload, options) {
       return hub.send(sessionId, payload, options);
     },
